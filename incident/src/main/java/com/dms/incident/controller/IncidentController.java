@@ -23,10 +23,11 @@ public class IncidentController {
     @PostMapping
 //    @PreAuthorize("hasAuthority('ROLE_CITIZEN') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<IncidentResponse> createIncident(
-            @Valid @RequestBody IncidentRequest request,
-            Principal principal) {
+            @Valid @RequestBody IncidentRequest request,UUID userId
+//            Principal principal)
+    {
 
-        UUID userId = UUID.fromString(principal.getName());
+//        UUID userId = UUID.fromString(principal.getName());
         IncidentResponse response = incidentService.reportIncident(request, userId);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }

@@ -6,6 +6,6 @@ import com.dms.incident.dto.response.IncidentResponse;
 import java.util.UUID;
 
 public interface IncidentService {
-    IncidentResponse reportIncident(IncidentRequest request, UUID uuid);
+    IncidentResponse reportIncident(IncidentRequest request, UUID id);
     IncidentResponse getIncidentById(UUID id);
 }

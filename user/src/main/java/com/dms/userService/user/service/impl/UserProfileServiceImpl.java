@@ -2,15 +2,24 @@ package com.dms.userService.user.service.impl;
 
 import com.dms.userService.user.dto.request.UserProfileRequest;
 import com.dms.userService.user.dto.response.UserProfileResponse;
+import com.dms.userService.user.entity.UserProfile;
+import com.dms.userService.user.repository.UserProfileRepository;
+import com.dms.userService.user.repository.UserRepository;
 import com.dms.userService.user.service.UserProfileService;
+import com.dms.userService.user.service.UserService;
+import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.stereotype.Service;
 
 import java.util.UUID;
-
+@Service
+@RequiredArgsConstructor
 public class UserProfileServiceImpl implements UserProfileService {
-    @Override
-    public UserProfileResponse createProfile(UserProfileRequest request) {
-        return null;
-    }
+    private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
+    private final ModelMapper mapper;
+
+
 
     @Override
     public UserProfileResponse getProfile(UUID userId) {

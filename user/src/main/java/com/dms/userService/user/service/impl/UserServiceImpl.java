@@ -1,45 +1,79 @@
 package com.dms.userService.user.service.impl;
 
-import com.dms.userService.user.dto.request.UserRequest;
+import com.dms.userService.user.dto.request.RegisterRequest;
+import com.dms.userService.user.dto.response.RegisterResponse;
 import com.dms.userService.user.dto.response.UserResponse;
+import com.dms.userService.user.entity.Role;
+import com.dms.userService.user.entity.User;
+import com.dms.userService.user.exception.UserAlreadyExistsException;
+import com.dms.userService.user.exception.UserNotFoundException;
+import com.dms.userService.user.repository.UserRepository;
 import com.dms.userService.user.service.UserService;
+import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
-
+@Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+    private final ModelMapper mapper;
+    private final UserRepository userRepository;
     @Override
-    public UserResponse createUser(UserRequest request) {
-        return null;
+    public RegisterResponse createUser( RegisterRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new UserAlreadyExistsException(
+                    "User with email " + request.getEmail() + " already exists.");
+        }
+
+        if (userRepository.existsByMobileNumber(request.getMobileNumber())) {
+            throw new UserAlreadyExistsException(
+                    "User with mobile number " + request.getMobileNumber() + " already exists.");
+        }
+
+        User user = mapper.map(request, User.class);
+        user.setProfileCompleted(false);
+
+        user = userRepository.save(user);
+
+        return mapper.map(user,RegisterResponse.class);
     }
 
     @Override
     public UserResponse getUserById(UUID userId) {
-        return null;
+        User user=userRepository.findById(userId).orElseThrow(()->new UserNotFoundException("User does not exists"+userId));
+        return mapper.map(user,UserResponse.class);
     }
 
     @Override
     public UserResponse getUserByEmail(String email) {
-        return null;
+        User user=userRepository.findByEmail(email).orElseThrow(()->new UserNotFoundException("User does not exists"+email));
+        return mapper.map(user,UserResponse.class);
     }
 
     @Override
     public UserResponse getUserByMobile(String mobileNumber) {
-        return null;
+        User user=userRepository.findByMobileNumber(mobileNumber).orElseThrow(()->new UserNotFoundException("User not found "));
+        return mapper.map(user,UserResponse.class);
     }
 
     @Override
     public List<UserResponse> getAllUsers() {
-        return List.of();
+        return userRepository.findAll().stream().map(user -> mapper.map(user,UserResponse.class)).toList();
     }
 
     @Override
     public UserResponse updateUserRole(UUID userId, String role) {
-        return null;
+        User user=userRepository.findById(userId).orElseThrow(()->new UserNotFoundException("User does not exists"+userId));
+
+        user.setRole(Role.valueOf(role));
+        return mapper.map(user,UserResponse.class);
     }
 
     @Override
-    public void deleteUser(UUID userId) {
-
+    public String deleteUser(UUID userId) {
+        userRepository.deleteById(userId);
+        return "User deleted successfully with userId"+userId;
     }
 }

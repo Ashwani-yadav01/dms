@@ -20,11 +20,11 @@ import java.util.UUID;
 public class GovernmentOfficial {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @MapsId
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

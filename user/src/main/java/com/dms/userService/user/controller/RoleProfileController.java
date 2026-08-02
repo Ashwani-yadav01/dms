@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/users/roles")
+@RequestMapping("api/users/{userId}/roles")
 public class RoleProfileController {
 
     // ---------------- Volunteer ----------------
@@ -27,14 +27,14 @@ public class RoleProfileController {
         return null;
     }
 
-    @PutMapping("/volunteer/{userId}")
+    @PutMapping("/volunteer")
     public ResponseEntity<VolunteerProfileResponse> updateVolunteer(
             @PathVariable UUID userId,
             @RequestBody VolunteerProfileRequest request) {
         return null;
     }
 
-    @DeleteMapping("/volunteer/{userId}")
+    @DeleteMapping("/volunteer")
     public ResponseEntity<Void> deleteVolunteer(
             @PathVariable UUID userId) {
         return null;

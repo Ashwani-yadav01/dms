@@ -8,14 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/users/profile")
+@RequestMapping("api/users/{userId}/profile")
 public class UserProfileController {
-
-    @PostMapping
-    public ResponseEntity<UserProfileResponse> createProfile(
-            @RequestBody UserProfileRequest request) {
-        return null;
-    }
 
     @GetMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> getProfile(
@@ -26,11 +20,12 @@ public class UserProfileController {
     @PutMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> updateProfile(
             @PathVariable UUID userId,
-            @RequestBody UserProfileRequest request) {
+            @RequestBody UserProfileRequest request,
+            @RequestParam String role) {
         return null;
     }
 
-    @PutMapping("/{userId}/photo")
+    @PutMapping("/photo")
     public ResponseEntity<UserProfileResponse> updateProfilePhoto(
             @PathVariable UUID userId,
             @RequestParam String profilePhotoUrl) {

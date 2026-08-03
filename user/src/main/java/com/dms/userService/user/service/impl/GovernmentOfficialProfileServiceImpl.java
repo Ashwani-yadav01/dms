@@ -2,29 +2,38 @@ package com.dms.userService.user.service.impl;
 
 import com.dms.userService.user.dto.request.GovernmentOfficialProfileRequest;
 import com.dms.userService.user.dto.response.GovernmentOfficialProfileResponse;
-import com.dms.userService.user.service.GovernmentOfficialService;
+import com.dms.userService.user.service.GovernmentOfficialProfileService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
+@Service
+@RequiredArgsConstructor
+public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialProfileService {
 
-public class GovernmentOfficialServiceImpl implements GovernmentOfficialService {
     @Override
-    public GovernmentOfficialProfileResponse createOfficial(GovernmentOfficialProfileRequest request) {
+    public boolean existsById(UUID userId) {
+        return false;
+    }
+
+    @Override
+    public GovernmentOfficialProfileResponse createProfile(UUID userId, GovernmentOfficialProfileRequest request) {
         return null;
     }
 
     @Override
-    public GovernmentOfficialProfileResponse getOfficial(UUID userId) {
+    public GovernmentOfficialProfileResponse getProfile(UUID userId) {
         return null;
     }
 
     @Override
-    public GovernmentOfficialProfileResponse updateOfficial(UUID userId, GovernmentOfficialProfileRequest request) {
+    public GovernmentOfficialProfileResponse updateProfile(UUID userId, GovernmentOfficialProfileRequest request) {
         return null;
     }
 
     @Override
-    public void deleteOfficial(UUID userId) {
+    public void deleteProfile(UUID userId) {
 
     }
 

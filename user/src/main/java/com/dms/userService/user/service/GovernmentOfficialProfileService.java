@@ -6,7 +6,7 @@ import com.dms.userService.user.dto.response.GovernmentOfficialProfileResponse;
 import java.util.List;
 import java.util.UUID;
 
-public interface GovernmentOfficialService {
+public interface GovernmentOfficialProfileService {
 
     boolean existsById(UUID userId);
 

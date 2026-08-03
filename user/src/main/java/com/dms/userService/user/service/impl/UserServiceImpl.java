@@ -20,25 +20,25 @@ import java.util.UUID;
 public class UserServiceImpl implements UserService {
     private final ModelMapper mapper;
     private final UserRepository userRepository;
-    @Override
-    public RegisterResponse createUser( RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException(
-                    "User with email " + request.getEmail() + " already exists.");
-        }
-
-        if (userRepository.existsByMobileNumber(request.getMobileNumber())) {
-            throw new UserAlreadyExistsException(
-                    "User with mobile number " + request.getMobileNumber() + " already exists.");
-        }
-
-        User user = mapper.map(request, User.class);
-        user.setProfileCompleted(false);
-
-        user = userRepository.save(user);
-
-        return mapper.map(user,RegisterResponse.class);
-    }
+//    @Override
+//    public RegisterResponse createUser( RegisterRequest request) {
+//        if (userRepository.existsByEmail(request.getEmail())) {
+//            throw new UserAlreadyExistsException(
+//                    "User with email " + request.getEmail() + " already exists.");
+//        }
+//
+//        if (userRepository.existsByMobileNumber(request.getMobileNumber())) {
+//            throw new UserAlreadyExistsException(
+//                    "User with mobile number " + request.getMobileNumber() + " already exists.");
+//        }
+//
+//        User user = mapper.map(request, User.class);
+//        user.setProfileCompleted(false);
+//
+//        user = userRepository.save(user);
+//
+//        return mapper.map(user,RegisterResponse.class);
+//    }
 
     @Override
     public UserResponse getUserById(UUID userId) {
@@ -63,17 +63,17 @@ public class UserServiceImpl implements UserService {
         return userRepository.findAll().stream().map(user -> mapper.map(user,UserResponse.class)).toList();
     }
 
-    @Override
-    public UserResponse updateUserRole(UUID userId, String role) {
-        User user=userRepository.findById(userId).orElseThrow(()->new UserNotFoundException("User does not exists"+userId));
+//    @Override
+//    public UserResponse updateUserRole(UUID userId, String role) {
+//        User user=userRepository.findById(userId).orElseThrow(()->new UserNotFoundException("User does not exists"+userId));
+//
+//        user.setRole(Role.valueOf(role));
+//        return mapper.map(user,UserResponse.class);
+//    }
 
-        user.setRole(Role.valueOf(role));
-        return mapper.map(user,UserResponse.class);
-    }
-
     @Override
-    public String deleteUser(UUID userId) {
+    public void deleteUser(UUID userId) {
         userRepository.deleteById(userId);
-        return "User deleted successfully with userId"+userId;
+        return ;
     }
 }

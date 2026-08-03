@@ -1,7 +1,10 @@
 package com.dms.userService.user.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -12,19 +15,20 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
+@Table(name = "government_official_profiles")
+@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
-public class GovernmentOfficialProfile {
+public class GovernmentOfficialProfile extends UserProfile {
 
     @Id
     private UUID id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
     @MapsId
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -45,16 +49,13 @@ public class GovernmentOfficialProfile {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reports_to")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
     private GovernmentOfficialProfile reportsTo;
 
     @OneToMany(mappedBy = "reportsTo", fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
     private List<GovernmentOfficialProfile> subordinates = new ArrayList<>();
 
     @CreatedDate
+    @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @LastModifiedDate

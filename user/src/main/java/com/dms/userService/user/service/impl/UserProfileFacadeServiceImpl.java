@@ -24,7 +24,7 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
     private final CitizenProfileService citizenProfileService;
     private final VolunteerProfileService volunteerProfileService;
     private final NGOProfileService ngoProfileService;
-    private final GovernmentOfficialService governmentOfficialService;
+    private final GovernmentOfficialProfileService governmentOfficialProfileService;
 
     @Override
     @Transactional
@@ -52,8 +52,8 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             return volunteerProfileService.getProfile(userId);
         } else if (ngoProfileService.existsById(userId)) {
             return ngoProfileService.getProfile(userId);
-        } else if (governmentOfficialService.existsById(userId)) {
-            return governmentOfficialService.getProfile(userId);
+        } else if (governmentOfficialProfileService.existsById(userId)) {
+            return governmentOfficialProfileService.getProfile(userId);
         }
 
         throw new UserNotFoundException("No specific profile role found for user ID: " + userId);
@@ -96,8 +96,8 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             volunteerProfileService.deleteProfile(userId);
         } else if (ngoProfileService.existsById(userId)) {
             ngoProfileService.deleteProfile(userId);
-        } else if (governmentOfficialService.existsById(userId)) {
-            governmentOfficialService.deleteProfile(userId);
+        } else if (governmentOfficialProfileService.existsById(userId)) {
+            governmentOfficialProfileService.deleteProfile(userId);
         } else {
             userProfileRepository.deleteById(userId);
         }
@@ -109,7 +109,7 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             case CitizenProfileRequest req -> citizenProfileService.createProfile(userId, req);
             case VolunteerProfileRequest req -> volunteerProfileService.createProfile(userId, req);
             case NGOProfileRequest req -> ngoProfileService.createProfile(userId, req);
-            case GovernmentOfficialProfileRequest req -> governmentOfficialService.createProfile(userId, req);
+            case GovernmentOfficialProfileRequest req -> governmentOfficialProfileService.createProfile(userId, req);
             default -> throw new BadRequestException("Unsupported profile type: " + request.getClass().getSimpleName());
         };
     }
@@ -120,7 +120,7 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             case CitizenProfileRequest req -> citizenProfileService.updateProfile(userId, req);
             case VolunteerProfileRequest req -> volunteerProfileService.updateProfile(userId, req);
             case NGOProfileRequest req -> ngoProfileService.updateProfile(userId, req);
-            case GovernmentOfficialProfileRequest req -> governmentOfficialService.updateProfile(userId, req);
+            case GovernmentOfficialProfileRequest req -> governmentOfficialProfileService.updateProfile(userId, req);
             default -> throw new BadRequestException("Unsupported profile type: " + request.getClass().getSimpleName());
         };
     }

@@ -4,10 +4,13 @@ import com.dms.userService.user.entity.Gender;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CitizenProfileResponse extends UserProfileResponse {
     private Gender gender;
-    private String dateOfBirth;
+    private LocalDate dateOfBirth;
     private String occupation;
 }

@@ -26,8 +26,7 @@ public class UserProfile {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
     private String name;
-    @Enumerated(EnumType.STRING)
-    private Gender gender;
+
     private String addressLine;
     private String city;
     private String state;

@@ -27,7 +27,7 @@ public class CitizenProfile {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    private String gender;
+    private Gender gender;
 
     private LocalDate dateOfBirth;
 

@@ -3,12 +3,14 @@ package com.dms.userService.user.dto.request;
 import com.dms.userService.user.entity.HierarchyLevel;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+import lombok.*;
 
 import java.util.UUID;
 
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 public class GovernmentOfficialProfileRequest extends UserProfileRequest {
 

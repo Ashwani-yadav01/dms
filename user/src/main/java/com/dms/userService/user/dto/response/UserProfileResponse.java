@@ -1,5 +1,6 @@
 package com.dms.userService.user.dto.response;
 
+import com.dms.userService.user.entity.Gender;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Data;

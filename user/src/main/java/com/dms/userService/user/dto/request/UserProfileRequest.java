@@ -1,8 +1,10 @@
 package com.dms.userService.user.dto.request;
 
+import com.dms.userService.user.entity.Gender;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,20 +20,24 @@ import lombok.Setter;
         @JsonSubTypes.Type(value = NGOProfileRequest.class, name = "NGO"),
         @JsonSubTypes.Type(value = GovernmentOfficialProfileRequest.class, name = "GOVERNMENT_OFFICIAL")
 })
-@Getter
-@Setter
 @Data
 public abstract class UserProfileRequest {
 
     @NotBlank(message = "Name is required")
     private String name;
-
+    @NotBlank(message = "addressLine is required")
     private String addressLine;
+    @NotBlank(message = "city is required")
     private String city;
+    @NotBlank(message = "State is required")
     private String state;
+    @NotBlank(message = "district is required")
     private String district;
+    @NotBlank(message = "Pincode is required")
     private String pincode;
+    @NotNull
     private Double latitude;
+    @NotNull
     private Double longitude;
     private String profilePhotoUrl;
 }

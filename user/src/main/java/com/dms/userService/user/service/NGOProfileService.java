@@ -6,17 +6,17 @@ import com.dms.userService.user.dto.response.NGOProfileResponse;
 import java.util.UUID;
 
 public interface NGOProfileService {
-    NGOProfileResponse createNGO(
-            NGOProfileRequest request);
 
-    NGOProfileResponse getNGO(UUID userId);
+    boolean existsById(UUID userId);
 
-    NGOProfileResponse updateNGO(
-            UUID userId,
-            NGOProfileRequest request);
+    NGOProfileResponse createProfile(UUID userId, NGOProfileRequest request);
 
-    void deleteNGO(UUID userId);
+    NGOProfileResponse getProfile(UUID userId);
 
-    NGOProfileResponse getNGOByRegistrationNumber(
-            String registrationNumber);
+    NGOProfileResponse updateProfile(UUID userId, NGOProfileRequest request);
+
+    void deleteProfile(UUID userId);
+
+    // Specific domain queries
+    NGOProfileResponse getNGOByRegistrationNumber(String registrationNumber);
 }

@@ -3,5 +3,6 @@ package com.dms.userService.user.entity;
 public enum Gender {
     MALE,
     FEMALE,
-    OTHERS
+    OTHER,
+    PREFER_NOT_TO_SAY
 }

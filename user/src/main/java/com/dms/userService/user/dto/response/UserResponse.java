@@ -19,7 +19,7 @@ public class UserResponse {
     private String email;
     private String mobileNumber;
     private Role role;
-    private UserProfileResponse userProfile;
+    private boolean profileCompleted;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -1,21 +1,21 @@
 package com.dms.userService.user.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class GovernmentDepartment {
 
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(nullable = false, unique = true)
@@ -24,5 +24,7 @@ public class GovernmentDepartment {
     private String description;
 
     @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)
-    private List<GovernmentOfficial> officials;
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<GovernmentOfficialProfile> officials = new ArrayList<>();
 }

@@ -17,5 +17,6 @@ public class NGOProfileRequest extends UserProfileRequest {
     private String ownerName;
 
     private String website;
+
     private String description;
 }

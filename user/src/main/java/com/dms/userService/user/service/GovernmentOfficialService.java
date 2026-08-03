@@ -8,14 +8,17 @@ import java.util.UUID;
 
 public interface GovernmentOfficialService {
 
-    GovernmentOfficialProfileResponse createOfficial(GovernmentOfficialProfileRequest request);
+    boolean existsById(UUID userId);
 
-    GovernmentOfficialProfileResponse getOfficial(UUID userId);
+    GovernmentOfficialProfileResponse createProfile(UUID userId, GovernmentOfficialProfileRequest request);
 
-    GovernmentOfficialProfileResponse updateOfficial(UUID userId, GovernmentOfficialProfileRequest request);
+    GovernmentOfficialProfileResponse getProfile(UUID userId);
 
-    void deleteOfficial(UUID userId);
+    GovernmentOfficialProfileResponse updateProfile(UUID userId, GovernmentOfficialProfileRequest request);
 
+    void deleteProfile(UUID userId);
+
+    // Specific domain queries
     GovernmentOfficialProfileResponse getOfficialByEmployeeId(String employeeId);
 
     List<GovernmentOfficialProfileResponse> getOfficialByDepartment(UUID departmentId);

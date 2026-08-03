@@ -16,8 +16,12 @@ public class RegisterResponse {
 
     private
     UUID userId;
+
     private String email;
+
     private Role role;
+
     private boolean profileCompleted;
+
     private String message;
 }

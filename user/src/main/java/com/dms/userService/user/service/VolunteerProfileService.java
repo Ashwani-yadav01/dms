@@ -7,15 +7,18 @@ import java.util.List;
 import java.util.UUID;
 
 public interface VolunteerProfileService {
-    VolunteerProfileResponse createVolunteer(VolunteerProfileRequest request);
 
-    VolunteerProfileResponse getVolunteer(UUID userId);
+    boolean existsById(UUID userId);
 
-    VolunteerProfileResponse updateVolunteer(UUID userId,
-                                             VolunteerProfileRequest request);
+    VolunteerProfileResponse createProfile(UUID userId, VolunteerProfileRequest request);
 
-    void deleteVolunteer(UUID userId);
+    VolunteerProfileResponse getProfile(UUID userId);
 
+    VolunteerProfileResponse updateProfile(UUID userId, VolunteerProfileRequest request);
+
+    void deleteProfile(UUID userId);
+
+    // Specific domain queries
     List<VolunteerProfileResponse> getVolunteersByAvailability(String availability);
 
     List<VolunteerProfileResponse> getVolunteersBySkill(String skill);

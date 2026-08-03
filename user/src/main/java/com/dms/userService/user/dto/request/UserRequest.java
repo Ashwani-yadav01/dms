@@ -1,6 +1,7 @@
 package com.dms.userService.user.dto.request;
 
 import com.dms.userService.user.entity.Role;
+import jakarta.persistence.Column;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -28,7 +29,5 @@ public class UserRequest {
     @NotNull(message = "Role is required")
     private Role role;
 
-    @Valid
-    @NotNull(message = "User profile payload is required")
-    private UserProfileRequest userProfile;
+    private boolean profileCompleted ;
 }

@@ -1,18 +1,14 @@
 package com.dms.userService.user.service.impl;
 
-import com.dms.userService.user.dto.request.RegisterRequest;
-import com.dms.userService.user.dto.response.RegisterResponse;
+
 import com.dms.userService.user.dto.response.UserResponse;
-import com.dms.userService.user.entity.Role;
 import com.dms.userService.user.entity.User;
-import com.dms.userService.user.exception.UserAlreadyExistsException;
 import com.dms.userService.user.exception.UserNotFoundException;
 import com.dms.userService.user.repository.UserRepository;
 import com.dms.userService.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.UUID;
 @Service

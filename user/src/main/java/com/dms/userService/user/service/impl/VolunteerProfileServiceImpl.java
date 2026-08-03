@@ -42,7 +42,6 @@ public class VolunteerProfileServiceImpl implements VolunteerProfileService {
         }
 
         VolunteerProfile volunteerProfile = mapper.map(request, VolunteerProfile.class);
-        volunteerProfile.setId(userId);
         volunteerProfile.setUser(user);
 
         VolunteerProfile savedProfile = volunteerProfileRepository.save(volunteerProfile);

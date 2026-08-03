@@ -1,21 +1,23 @@
 package com.dms.userService.user.dto.request;
 
+import com.dms.userService.user.entity.DepartmentCategory;
 import com.dms.userService.user.entity.HierarchyLevel;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.util.UUID;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 @EqualsAndHashCode(callSuper = true)
 public class GovernmentOfficialProfileRequest extends UserProfileRequest {
 
-    @NotNull(message = "Department ID is required")
-    private UUID departmentId;
+    @NotBlank(message = "Department name is required")
+    private String departmentName;
+
+    @NotNull(message = "Department category is required")
+    private DepartmentCategory departmentCategory;
 
     @NotBlank(message = "Designation is required")
     private String designation;
@@ -25,8 +27,24 @@ public class GovernmentOfficialProfileRequest extends UserProfileRequest {
 
     private String officialPhone;
 
-    @NotNull(message = "Hierarchy Level is required")
+    @NotNull(message = "Hierarchy level is required")
     private HierarchyLevel hierarchyLevel;
 
-    private UUID reportsToOfficialId;
+    private Double dutyRadiusKm = 25.0;
+
+    private String jurisdictionCode;
+
+    private UUID reportsToUserId; // Optional supervisor
+
+    // --- NORMALIZE INPUT STRING TO PREVENT INCONSISTENCY ---
+    public void setDepartmentName(String departmentName) {
+        if (departmentName != null) {
+            this.departmentName = departmentName.trim()
+                    .replaceAll("\\s+", " ")
+                    .replace("&", "AND")
+                    .toUpperCase();
+        } else {
+            this.departmentName = null;
+        }
+    }
 }

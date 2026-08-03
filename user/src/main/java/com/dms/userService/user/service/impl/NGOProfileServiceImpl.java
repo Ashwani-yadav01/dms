@@ -45,7 +45,6 @@ public class NGOProfileServiceImpl implements NGOProfileService {
         }
 
         NGOProfile ngoProfile = mapper.map(request, NGOProfile.class);
-        ngoProfile.setId(userId);
         ngoProfile.setUser(user);
 
         NGOProfile savedProfile = ngoProfileRepository.save(ngoProfile);

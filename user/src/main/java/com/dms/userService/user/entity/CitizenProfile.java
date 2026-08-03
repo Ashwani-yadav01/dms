@@ -20,15 +20,16 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@PrimaryKeyJoinColumn(name = "user_id")
 public class CitizenProfile extends UserProfile {
-
-    @Id
-    private UUID id;
-
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @MapsId
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
-    private User user;
+//
+//    @Id
+//    private UUID id;
+//
+//    @OneToOne(fetch = FetchType.LAZY, optional = false)
+//    @MapsId
+//    @JoinColumn(name = "user_id", nullable = false, unique = true)
+//    private User user;
 
     @Enumerated(EnumType.STRING)
     private Gender gender;

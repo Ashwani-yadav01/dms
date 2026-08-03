@@ -4,10 +4,21 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.geo.Point;
 
+import java.util.UUID;
+
+@Entity
+@Table(name = "user_profiles")
+@Inheritance(strategy = InheritanceType.JOINED)
 @Getter
 @Setter
-@MappedSuperclass
 public abstract class UserProfile {
+    @Id
+    private UUID id;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @Column(nullable = false)
     private String name;

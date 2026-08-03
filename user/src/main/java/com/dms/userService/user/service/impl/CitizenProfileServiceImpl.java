@@ -42,7 +42,6 @@ public class CitizenProfileServiceImpl implements CitizenProfileService {
 
         CitizenProfile citizenProfile = mapper.map(request, CitizenProfile.class);
 
-        citizenProfile.setId(userId);
         citizenProfile.setUser(user);
 
         CitizenProfile savedProfile = citizenProfileRepository.save(citizenProfile);

@@ -1,6 +1,5 @@
 package com.dms.userService.user.dto.response;
 
-import com.dms.userService.user.entity.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,12 +11,10 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RegisterResponse {
+public class AuthResponse {
 
+    private String accessToken;
     private UUID userId;
-    private String email;
-    private Role role;
+    private String role;
     private boolean profileCompleted;
-    private String accessToken; // JWT token returned for immediate profile completion
-    private String message;
 }

@@ -5,8 +5,8 @@ public enum IncidentStatus {
     VERIFIED,
     DISPATCHED,
     RESOLVED,
-    REJECTED;
-
+    REJECTED,
+    DUPLICATE;
     /**
      * Helper check to determine if an incident is still actively needing attention.
      */

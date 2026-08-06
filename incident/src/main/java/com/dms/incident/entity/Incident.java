@@ -12,7 +12,9 @@ import java.util.UUID;
 @Table(name = "tbl_incidents", indexes = {
         @Index(name = "idx_incident_status", columnList = "status"),
         @Index(name = "idx_incident_reported_by", columnList = "reportedBy"),
-        @Index(name = "idx_incident_severity", columnList = "severity")
+        @Index(name = "idx_incident_severity", columnList = "severity"),
+        // Added composite index for fast spatial queries
+        @Index(name = "idx_incident_location", columnList = "latitude, longitude")
 })
 @Getter
 @Setter
@@ -51,6 +53,10 @@ public class Incident {
 
     @Column(nullable = false, updatable = false)
     private UUID reportedBy;
+
+    // Added: Points to the primary incident if this incident is marked as DUPLICATE
+    @Column(name = "parent_incident_id")
+    private UUID parentIncidentId;
 
     @CreationTimestamp
     @Column(updatable = false)

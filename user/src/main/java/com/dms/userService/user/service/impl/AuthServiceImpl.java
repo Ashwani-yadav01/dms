@@ -93,4 +93,14 @@ public class AuthServiceImpl implements AuthService {
                 .profileCompleted(user.isProfileCompleted())
                 .build();
     }
+
+    @Override
+    public void logout(String authorizationHeader) {
+
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            throw new IllegalArgumentException("Invalid Authorization header");
+        }
+
+        String token = authorizationHeader.substring(7);
+    }
 }

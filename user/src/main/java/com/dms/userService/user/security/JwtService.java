@@ -1,5 +1,6 @@
 package com.dms.userService.user.security;
 
+import com.dms.userService.user.entity.User; // Import your User entity
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -32,8 +33,16 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
+    // Updated: Populates custom claims (userId & role) automatically
     public String generateToken(UserDetails userDetails) {
-        return generateToken(new HashMap<>(), userDetails);
+        Map<String, Object> extraClaims = new HashMap<>();
+
+        if (userDetails instanceof User user) {
+            extraClaims.put("userId", user.getId().toString()); // Put UUID String
+            extraClaims.put("role", user.getRole().name());      // Put Role String
+        }
+
+        return generateToken(extraClaims, userDetails);
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {

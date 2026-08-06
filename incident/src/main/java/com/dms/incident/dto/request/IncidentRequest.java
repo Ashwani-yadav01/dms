@@ -26,4 +26,7 @@ public class IncidentRequest {
 
     @NotNull(message = "Severity level is required")
     private Severity severity;
-}//Browser Geolocation API for latitude and longitude
+
+    @NotBlank(message = "Please provide an image URL of the incident to assist rescue operations")
+    private String imageUrl;
+}

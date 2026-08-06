@@ -11,7 +11,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "tbl_incidents", indexes = {
         @Index(name = "idx_incident_status", columnList = "status"),
-        @Index(name = "idx_incident_location", columnList = "latitude, longitude")
+        @Index(name = "idx_incident_reported_by", columnList = "reportedBy"),
+        @Index(name = "idx_incident_severity", columnList = "severity")
 })
 @Getter
 @Setter
@@ -38,14 +39,18 @@ public class Incident {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private Severity severity; // LOW, MEDIUM, HIGH, CRITICAL
+    private Severity severity;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private IncidentStatus status; // REPORTED, VERIFIED, DISPATCHED, RESOLVED, REJECTED
+    private IncidentStatus status = IncidentStatus.REPORTED;
 
     @Column(nullable = false)
-    private UUID reportedBy; // User ID from Auth/User Service
+    private String imageUrl;
+
+    @Column(nullable = false, updatable = false)
+    private UUID reportedBy;
 
     @CreationTimestamp
     @Column(updatable = false)

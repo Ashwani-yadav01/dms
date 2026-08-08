@@ -9,6 +9,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,6 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,9 +29,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String secretKey;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -44,17 +48,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .getPayload();
 
                 String userIdStr = claims.get("userId", String.class);
+                if (userIdStr == null) {
+                    userIdStr = claims.getSubject();
+                }
+
                 String roleStr = claims.get("role", String.class);
 
                 if (userIdStr != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UUID userId = UUID.fromString(userIdStr);
 
-                    // Add ROLE_ prefix so @PreAuthorize("hasRole('GOVERNMENT_OFFICIAL')") works
-                    List<SimpleGrantedAuthority> authorities = List.of(
-                            new SimpleGrantedAuthority("ROLE_" + roleStr)
-                    );
+                    List<SimpleGrantedAuthority> authorities = Collections.emptyList();
+                    if (roleStr != null && !roleStr.isBlank()) {
+                        String authority = roleStr.startsWith("ROLE_") ? roleStr : "ROLE_" + roleStr;
+                        authorities = List.of(new SimpleGrantedAuthority(authority));
+                    }
 
-                    // Store the UUID as the Principal
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(userId, null, authorities);
 

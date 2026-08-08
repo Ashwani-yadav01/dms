@@ -11,13 +11,4 @@ public class ResourceNotFoundException extends RuntimeException {
         super(message);
     }
 
-    @Data
-    @AllArgsConstructor
-    public static class ErrorResponse {
-
-        private LocalDateTime timestamp;
-        private int status;
-        private String error;
-        private String message;
-    }
 }

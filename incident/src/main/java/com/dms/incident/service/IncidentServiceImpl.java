@@ -1,13 +1,16 @@
 package com.dms.incident.service;
 
+import com.dms.common.events.IncidentCreatedEvent;
 import com.dms.incident.dto.request.IncidentRequest;
 import com.dms.incident.dto.response.IncidentResponse;
 import com.dms.incident.entity.Incident;
 import com.dms.incident.entity.IncidentStatus;
 import com.dms.incident.entity.Severity;
 import com.dms.incident.exception.IncidentNotFoundException;
+import com.dms.incident.messaging.IncidentEventPublisher;
 import com.dms.incident.repository.IncidentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -26,7 +30,7 @@ public class IncidentServiceImpl implements IncidentService {
 
     private final ModelMapper mapper;
     private final IncidentRepository repository;
-
+    private final IncidentEventPublisher incidentEventPublisher;
     private static final double EARTH_RADIUS_KM = 6371.0;
     private static final double DUPLICATE_RADIUS_METERS = 50.0;
     private static final List<IncidentStatus> ACTIVE_STATUSES = List.of(
@@ -65,29 +69,26 @@ public class IncidentServiceImpl implements IncidentService {
         newIncident.setReportedBy(userId);
         newIncident.setStatus(IncidentStatus.REPORTED);
 
-        // --- Deduplication Logic (50m Radius) ---
-        // 1. Fetch nearby active incidents using a bounding box or Haversine query
+        // --- Deduplication Logic (50m Radius + Same Incident Type) ---
         double radiusInKm = DUPLICATE_RADIUS_METERS / 1000.0;
         List<Incident> nearbyIncidents = repository.findNearbyActiveIncidents(
                 request.getLatitude(),
                 request.getLongitude(),
                 radiusInKm,
-                LocalDateTime.now().minusDays(1) // Window for recent active incidents
+                LocalDateTime.now().minusDays(1)
         );
 
-        // 2. Find the closest active incident within 50 meters
         Optional<Incident> parentIncident = nearbyIncidents.stream()
+                .filter(i -> i.getIncidentType() == request.getIncidentType())
                 .filter(i -> isWithin50Meters(
                         request.getLatitude(), request.getLongitude(),
                         i.getLatitude(), i.getLongitude()
                 ))
                 .findFirst();
 
-        // 3. If an existing active incident is found, mark this new incident as DUPLICATE and set parent ID
         if (parentIncident.isPresent()) {
             newIncident.setStatus(IncidentStatus.DUPLICATE);
 
-            // If the matched incident is itself a duplicate, link to its parent root, otherwise link directly to it
             UUID rootParentId = parentIncident.get().getParentIncidentId() != null
                     ? parentIncident.get().getParentIncidentId()
                     : parentIncident.get().getId();
@@ -96,6 +97,24 @@ public class IncidentServiceImpl implements IncidentService {
         }
 
         Incident savedIncident = repository.save(newIncident);
+
+        // --- PUBLISH KAFKA EVENT IF NOT A DUPLICATE ---
+        if (savedIncident.getStatus() != IncidentStatus.DUPLICATE) {
+            IncidentCreatedEvent event = IncidentCreatedEvent.builder()
+                    .incidentId(savedIncident.getId())
+                    .title(savedIncident.getTitle())
+                    .description(savedIncident.getDescription())
+                    .incidentType(savedIncident.getIncidentType().name())
+                    .severity(savedIncident.getSeverity().name())
+                    .latitude(savedIncident.getLatitude())
+                    .longitude(savedIncident.getLongitude())
+                    .reportedBy(savedIncident.getReportedBy())
+                    .createdAt(savedIncident.getCreatedAt())
+                    .build();
+
+            incidentEventPublisher.publishIncidentCreated(event);
+        }
+
         return mapper.map(savedIncident, IncidentResponse.class);
     }
 
@@ -174,7 +193,7 @@ public class IncidentServiceImpl implements IncidentService {
         Incident incident = findIncidentEntityById(id);
 
         mapper.map(request, incident);
-        incident.setReportedBy(userId); // Maintain reportedBy integrity
+        incident.setReportedBy(userId);
 
         Incident updatedIncident = repository.save(incident);
         return mapper.map(updatedIncident, IncidentResponse.class);
@@ -187,7 +206,28 @@ public class IncidentServiceImpl implements IncidentService {
         repository.delete(incident);
     }
 
-    // --- Private Helpers ---
+    @Override
+    @Transactional
+    public void processRescueMissionCompletion(UUID incidentId, UUID missionId, String resolutionNotes) {
+        Incident incident = repository.findById(incidentId)
+                .orElseThrow(() -> new IncidentNotFoundException("Incident is not found with id " + incidentId));
+
+        if (incident.getStatus().isTerminal()) {
+            log.info("Incident ID: {} is already in terminal state ({}). Skipping state transition.",
+                    incidentId, incident.getStatus());
+            return;
+        }
+
+        incident.setStatus(IncidentStatus.RESOLVED);
+
+        String existingDescription = incident.getDescription() != null ? incident.getDescription() : "";
+        String noteSummary = String.format("\n[RESOLVED via Rescue Mission %s]: %s",
+                missionId, resolutionNotes != null ? resolutionNotes : "Completed successfully.");
+        incident.setDescription(existingDescription + noteSummary);
+
+        repository.save(incident);
+        log.info("Incident ID: {} status updated to RESOLVED via Kafka event.", incidentId);
+    }
 
     private Incident findIncidentEntityById(UUID id) {
         return repository.findById(id)

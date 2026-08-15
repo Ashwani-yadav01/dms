@@ -1,5 +1,6 @@
 package com.dms.incident.dto.request;
 
+import com.dms.incident.entity.IncidentType;
 import com.dms.incident.entity.Severity;
 import jakarta.validation.constraints.*;
 import lombok.Data;
@@ -26,6 +27,9 @@ public class IncidentRequest {
 
     @NotNull(message = "Severity level is required")
     private Severity severity;
+
+    @NotNull(message = "Incident type is required for rescue team allocation")
+    private IncidentType incidentType;
 
     @NotBlank(message = "Please provide an image URL of the incident to assist rescue operations")
     private String imageUrl;

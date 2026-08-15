@@ -1,8 +1,5 @@
-package com.dms.incident.dto.response;
+package com.dms.common.events;
 
-import com.dms.incident.entity.IncidentStatus;
-import com.dms.incident.entity.IncidentType;
-import com.dms.incident.entity.Severity;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,17 +12,14 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IncidentResponse {
-    private UUID id;
+public class IncidentCreatedEvent {
+    private UUID incidentId;
     private String title;
     private String description;
+    private String incidentType;
+    private String severity;
     private Double latitude;
     private Double longitude;
-    private String imageUrl;
-    private Severity severity;
-    private IncidentType incidentType;
-    private IncidentStatus status;
     private UUID reportedBy;
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }

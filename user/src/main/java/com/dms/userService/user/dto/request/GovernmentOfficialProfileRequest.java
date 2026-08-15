@@ -16,6 +16,9 @@ public class GovernmentOfficialProfileRequest extends UserProfileRequest {
     @NotBlank(message = "Department name is required")
     private String departmentName;
 
+    // Optional foreign reference to physical Rescue Department in Rescue Service
+    private UUID departmentId;
+
     @NotNull(message = "Department category is required")
     private DepartmentCategory departmentCategory;
 

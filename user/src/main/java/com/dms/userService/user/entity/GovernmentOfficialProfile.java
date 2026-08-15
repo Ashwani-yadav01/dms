@@ -1,10 +1,7 @@
 package com.dms.userService.user.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -24,17 +21,12 @@ import java.util.UUID;
 @PrimaryKeyJoinColumn(name = "user_id")
 public class GovernmentOfficialProfile extends UserProfile {
 
-//    @Id
-//    private UUID id;
-//
-//    @OneToOne(fetch = FetchType.LAZY, optional = false)
-//    @MapsId
-//    @JoinColumn(name = "user_id", nullable = false, unique = true)
-//    private User user;
-
-    // --- EMBEDDED DEPARTMENT DETAILS ---
     @Column(nullable = false)
     private String departmentName;
+
+    // Foreign reference to physical Rescue Department in Rescue Service
+    @Column(name = "department_id")
+    private UUID departmentId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -71,23 +63,13 @@ public class GovernmentOfficialProfile extends UserProfile {
     @Column(nullable = false)
     private Boolean isVerified = false; // Verified flag for emergency assignments
 
-    private String jurisdictionCode; // e.g. "DISTRICT_DEHRADUN_ZONE_1"
+    private String jurisdictionCode; // e.g. "DISTRICT_DEHRADUN"
 
-    // --- AUDITING ---
+    // --- AUDITING (Handled automatically by AuditingEntityListener) ---
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 }

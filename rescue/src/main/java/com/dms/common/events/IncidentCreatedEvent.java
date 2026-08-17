@@ -1,6 +1,5 @@
 package com.dms.common.events;
 
-import com.dms.rescueService.rescue.entity.MissionStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,9 +19,10 @@ public class IncidentCreatedEvent implements Serializable {
     private UUID assignedLeaderId;
     private String title;
     private String description;
+    private String incidentType;
     private String severity;
     private Double latitude;
     private Double longitude;
-    private MissionStatus status;
+    private String status;
     private LocalDateTime createdAt;
 }

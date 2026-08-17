@@ -1,5 +1,6 @@
 package com.dms.rescueService.rescue.service.impl;
 
+import com.dms.common.events.RescueMissionStatusUpdatedEvent;
 import com.dms.rescueService.rescue.dto.request.MissionStatusUpdateRequest;
 import com.dms.rescueService.rescue.dto.response.RescueMissionResponse;
 import com.dms.rescueService.rescue.entity.MissionStatus;
@@ -10,6 +11,8 @@ import com.dms.rescueService.rescue.repository.RescueMissionRepository;
 import com.dms.rescueService.rescue.service.RescueMissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,10 @@ public class RescueMissionServiceImpl implements RescueMissionService {
 
     private final RescueMissionRepository missionRepository;
     private final RescueDepartmentRepository departmentRepository;
+    private final KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate;
+
+    @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
+    private String statusTopic;
 
     @Override
     @Transactional
@@ -53,7 +60,26 @@ public class RescueMissionServiceImpl implements RescueMissionService {
 
         RescueMission updated = missionRepository.save(mission);
         log.info("Transitioned Mission ID: {} status from {} to {}", missionId, oldStatus, newStatus);
+
+        // Publish event to Kafka for IncidentService to consume
+        publishStatusUpdateEvent(updated);
+
         return mapToResponse(updated);
+    }
+
+    private void publishStatusUpdateEvent(RescueMission mission) {
+        RescueMissionStatusUpdatedEvent event = RescueMissionStatusUpdatedEvent.builder()
+                .missionId(mission.getId())
+                .incidentId(mission.getIncidentId())
+                .departmentId(mission.getDepartment().getId())
+                .status(mission.getStatus())
+                .notes(mission.getNotes())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        kafkaTemplate.send(statusTopic, mission.getIncidentId().toString(), event);
+        log.info("Published RescueMissionStatusUpdatedEvent to topic [{}] for Incident ID: {}, Status: {}",
+                statusTopic, mission.getIncidentId(), mission.getStatus());
     }
 
     @Override

@@ -208,9 +208,37 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Override
     @Transactional
+    public IncidentResponse updateStatusFromRescueEvent(UUID incidentId, String status, String notes) {
+        Incident incident = findIncidentEntityById(incidentId);
+
+        if (incident.getStatus().isTerminal()) {
+            log.info("Incident ID: {} is already in terminal state ({}). Skipping status transition from rescue event.",
+                    incidentId, incident.getStatus());
+            return mapper.map(incident, IncidentResponse.class);
+        }
+
+        try {
+            IncidentStatus newStatus = IncidentStatus.valueOf(status);
+            incident.setStatus(newStatus);
+        } catch (IllegalArgumentException e) {
+            log.warn("Received status string [{}] does not directly map to IncidentStatus enum. Retaining current status.", status);
+        }
+
+        if (notes != null && !notes.isBlank()) {
+            String existingDescription = incident.getDescription() != null ? incident.getDescription() : "";
+            incident.setDescription(existingDescription + "\n[Rescue Update]: " + notes.trim());
+        }
+
+        Incident savedIncident = repository.save(incident);
+        log.info("Updated Incident ID: {} status to {} based on Rescue Event.", incidentId, savedIncident.getStatus());
+
+        return mapper.map(savedIncident, IncidentResponse.class);
+    }
+
+    @Override
+    @Transactional
     public void processRescueMissionCompletion(UUID incidentId, UUID missionId, String resolutionNotes) {
-        Incident incident = repository.findById(incidentId)
-                .orElseThrow(() -> new IncidentNotFoundException("Incident is not found with id " + incidentId));
+        Incident incident = findIncidentEntityById(incidentId);
 
         if (incident.getStatus().isTerminal()) {
             log.info("Incident ID: {} is already in terminal state ({}). Skipping state transition.",
@@ -232,5 +260,10 @@ public class IncidentServiceImpl implements IncidentService {
     private Incident findIncidentEntityById(UUID id) {
         return repository.findById(id)
                 .orElseThrow(() -> new IncidentNotFoundException("Incident is not found with id " + id));
+    }
+    @Override
+    public void notifyEndUser(UUID incidentId, String status, String notes) {
+        log.info("Notifying end-user for Incident ID: {} with new Status: {} and Notes: {}",
+                incidentId, status, notes);
     }
 }

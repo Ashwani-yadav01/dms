@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -12,14 +13,16 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IncidentCreatedEvent {
+public class IncidentCreatedEvent implements Serializable {
+
     private UUID incidentId;
+    private UUID reportedBy;
     private String title;
     private String description;
     private String incidentType;
     private String severity;
     private Double latitude;
     private Double longitude;
-    private UUID reportedBy;
+    private String status;
     private LocalDateTime createdAt;
 }

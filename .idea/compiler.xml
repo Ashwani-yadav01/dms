@@ -41,6 +41,11 @@
         <module name="notification" />
         <module name="shelter" />
         <module name="resource" />
+      </profile>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
         <module name="rescue" />
       </profile>
     </annotationProcessing>

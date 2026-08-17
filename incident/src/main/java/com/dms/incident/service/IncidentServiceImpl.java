@@ -208,13 +208,14 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Override
     @Transactional
-    public IncidentResponse updateStatusFromRescueEvent(UUID incidentId, String status, String notes) {
+    public void updateStatusFromRescueEvent(UUID incidentId, String status, String notes) {
         Incident incident = findIncidentEntityById(incidentId);
 
         if (incident.getStatus().isTerminal()) {
             log.info("Incident ID: {} is already in terminal state ({}). Skipping status transition from rescue event.",
                     incidentId, incident.getStatus());
-            return mapper.map(incident, IncidentResponse.class);
+            mapper.map(incident, IncidentResponse.class);
+            return;
         }
 
         try {
@@ -232,7 +233,7 @@ public class IncidentServiceImpl implements IncidentService {
         Incident savedIncident = repository.save(incident);
         log.info("Updated Incident ID: {} status to {} based on Rescue Event.", incidentId, savedIncident.getStatus());
 
-        return mapper.map(savedIncident, IncidentResponse.class);
+        mapper.map(savedIncident, IncidentResponse.class);
     }
 
     @Override

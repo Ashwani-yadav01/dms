@@ -16,7 +16,8 @@ import java.util.UUID;
 public class IncidentCreatedEvent implements Serializable {
 
     private UUID incidentId;
-    private UUID assignedLeaderId;
+    private UUID reportedBy;
+    private UUID assignedLeaderId; // Include both so all downstream consumers get required fields
     private String title;
     private String description;
     private String incidentType;

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface DepartmentService {
-    void processAutoDispatchForIncident(IncidentCreatedEvent event);
+//    void processAutoDispatchForIncident(IncidentCreatedEvent event);
     DepartmentResponse createDepartment(DepartmentCreateRequest request);
     DepartmentResponse updateDepartment(UUID id, DepartmentUpdateRequest request);
     DepartmentResponse toggleAvailability(UUID id, Boolean isAvailable);

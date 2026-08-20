@@ -18,26 +18,29 @@ import java.util.UUID;
 public class RescueMission {
 
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.UUID) // Standardize UUID generation
     private UUID id;
 
-    @Column(nullable = false)
-    private UUID incidentId; // Linked incident from Incident Service
+    @Column(name = "incident_id", nullable = false)
+    private UUID incidentId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id", nullable = false)
     private RescueDepartment department;
 
-    @Column(nullable = false)
-    private UUID assignedLeaderId; // Station Chief / Leader User ID from User Service
+    @Column(name = "assigned_leader_id", nullable = true) // Changed to nullable for auto-dispatch
+    private UUID assignedLeaderId;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private MissionStatus status = MissionStatus.DISPATCHED;
 
+    @Builder.Default
     @Column(nullable = false)
-    private Integer slaMinutes = 120; // Time threshold in minutes before escalation
+    private Integer slaMinutes = 120;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean isSlaBreached = false;
 

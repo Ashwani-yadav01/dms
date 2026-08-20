@@ -55,7 +55,7 @@ public class KafkaConsumerConfig {
     public ConcurrentKafkaListenerContainerFactory<String, IncidentCreatedEvent> incidentKafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, IncidentCreatedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(incidentConsumerFactory());
+        factory.setConsumerFactory(incidentConsumerFactory()); // FIXED: Replaced consumerFactory() with incidentConsumerFactory()
         return factory;
     }
 }

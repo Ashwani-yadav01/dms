@@ -30,6 +30,18 @@ services:
       - microservice-network
     restart: unless-stopped
 
+  # --- REDIS SERVICE (FOR SPATIAL GEO CACHE) ---
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
   # --- KAFKA & ZOOKEEPER SERVICES ---
 
   zookeeper:
@@ -85,3 +97,4 @@ networks:
 volumes:
   postgres:
   pgadmin:
+  redis_data:

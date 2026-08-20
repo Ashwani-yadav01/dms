@@ -31,6 +31,7 @@ public class IncidentServiceImpl implements IncidentService {
     private final ModelMapper mapper;
     private final IncidentRepository repository;
     private final IncidentEventPublisher incidentEventPublisher;
+
     private static final double EARTH_RADIUS_KM = 6371.0;
     private static final double DUPLICATE_RADIUS_METERS = 50.0;
     private static final List<IncidentStatus> ACTIVE_STATUSES = List.of(
@@ -39,9 +40,6 @@ public class IncidentServiceImpl implements IncidentService {
             IncidentStatus.DISPATCHED
     );
 
-    /**
-     * Calculates distance between two lat/lng pairs in meters.
-     */
     public static double calculateDistanceInMeters(double lat1, double lon1, double lat2, double lon2) {
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
@@ -52,12 +50,9 @@ public class IncidentServiceImpl implements IncidentService {
 
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-        return EARTH_RADIUS_KM * c * 1000.0; // Convert KM to Meters
+        return EARTH_RADIUS_KM * c * 1000.0;
     }
 
-    /**
-     * Helper check for 50 meters.
-     */
     public static boolean isWithin50Meters(double lat1, double lon1, double lat2, double lon2) {
         return calculateDistanceInMeters(lat1, lon1, lat2, lon2) <= DUPLICATE_RADIUS_METERS;
     }
@@ -69,7 +64,6 @@ public class IncidentServiceImpl implements IncidentService {
         newIncident.setReportedBy(userId);
         newIncident.setStatus(IncidentStatus.REPORTED);
 
-        // --- Deduplication Logic (50m Radius + Same Incident Type) ---
         double radiusInKm = DUPLICATE_RADIUS_METERS / 1000.0;
         List<Incident> nearbyIncidents = repository.findNearbyActiveIncidents(
                 request.getLatitude(),
@@ -98,7 +92,6 @@ public class IncidentServiceImpl implements IncidentService {
 
         Incident savedIncident = repository.save(newIncident);
 
-        // --- PUBLISH KAFKA EVENT IF NOT A DUPLICATE ---
         if (savedIncident.getStatus() != IncidentStatus.DUPLICATE) {
             IncidentCreatedEvent event = IncidentCreatedEvent.builder()
                     .incidentId(savedIncident.getId())
@@ -208,13 +201,12 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Override
     @Transactional
-    public void updateStatusFromRescueEvent(UUID incidentId, String status, String notes) {
+    public void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes) {
         Incident incident = findIncidentEntityById(incidentId);
 
         if (incident.getStatus().isTerminal()) {
             log.info("Incident ID: {} is already in terminal state ({}). Skipping status transition from rescue event.",
                     incidentId, incident.getStatus());
-            mapper.map(incident, IncidentResponse.class);
             return;
         }
 
@@ -232,8 +224,6 @@ public class IncidentServiceImpl implements IncidentService {
 
         Incident savedIncident = repository.save(incident);
         log.info("Updated Incident ID: {} status to {} based on Rescue Event.", incidentId, savedIncident.getStatus());
-
-        mapper.map(savedIncident, IncidentResponse.class);
     }
 
     @Override
@@ -262,6 +252,7 @@ public class IncidentServiceImpl implements IncidentService {
         return repository.findById(id)
                 .orElseThrow(() -> new IncidentNotFoundException("Incident is not found with id " + id));
     }
+
     @Override
     public void notifyEndUser(UUID incidentId, String status, String notes) {
         log.info("Notifying end-user for Incident ID: {} with new Status: {} and Notes: {}",

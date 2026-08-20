@@ -1,8 +1,7 @@
 package com.dms.rescueService.rescue.controller;
 
-import com.dms.rescueService.rescue.dto.request.MissionStatusUpdateRequest;
+import com.dms.rescueService.rescue.dto.request.MissionActionRequest;
 import com.dms.rescueService.rescue.dto.response.RescueMissionResponse;
-import com.dms.rescueService.rescue.entity.MissionStatus;
 import com.dms.rescueService.rescue.service.RescueMissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,35 +18,47 @@ public class RescueMissionController {
 
     private final RescueMissionService missionService;
 
-    // --- READ BY ID ---
+    // --- READ ENDPOINTS ---
     @GetMapping("/{id}")
     public ResponseEntity<RescueMissionResponse> getMissionById(@PathVariable UUID id) {
         return ResponseEntity.ok(missionService.getMissionById(id));
     }
 
-    // --- TRANSITION STATUS ---
-    @PatchMapping("/{id}/status")
-    public ResponseEntity<RescueMissionResponse> updateMissionStatus(
-            @PathVariable UUID id,
-            @Valid @RequestBody MissionStatusUpdateRequest request) {
-        return ResponseEntity.ok(missionService.updateMissionStatus(id, request));
-    }
-
-    // --- SEARCH BY INCIDENT ---
     @GetMapping("/incident/{incidentId}")
     public ResponseEntity<List<RescueMissionResponse>> getMissionsByIncidentId(@PathVariable UUID incidentId) {
         return ResponseEntity.ok(missionService.getMissionsByIncidentId(incidentId));
     }
 
-    // --- SEARCH BY DEPARTMENT ---
-    @GetMapping("/department/{departmentId}")
-    public ResponseEntity<List<RescueMissionResponse>> getMissionsByDepartmentId(@PathVariable UUID departmentId) {
-        return ResponseEntity.ok(missionService.getMissionsByDepartmentId(departmentId));
+    // --- DEDICATED ACTION ENDPOINTS ---
+
+    /**
+     * Complete a mission (e.g., field unit submits final proof/notes).
+     * Enforces State Pattern: Must be ON_SCENE to complete.
+     */
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<RescueMissionResponse> completeMission(
+            @PathVariable UUID id,
+            @Valid @RequestBody MissionActionRequest request) {
+        return ResponseEntity.ok(missionService.completeMission(id, request));
     }
 
-    // --- FILTER BY STATUS ---
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<RescueMissionResponse>> getMissionsByStatus(@PathVariable MissionStatus status) {
-        return ResponseEntity.ok(missionService.getMissionsByStatus(status));
+    /**
+     * Cancel a mission (e.g., dispatcher revokes assignment or false alarm).
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<RescueMissionResponse> cancelMission(
+            @PathVariable UUID id,
+            @Valid @RequestBody MissionActionRequest request) {
+        return ResponseEntity.ok(missionService.cancelMission(id, request));
+    }
+
+    /**
+     * Escalate a mission (e.g., unit needs backup or hazard escalation).
+     */
+    @PostMapping("/{id}/escalate")
+    public ResponseEntity<RescueMissionResponse> escalateMission(
+            @PathVariable UUID id,
+            @Valid @RequestBody MissionActionRequest request) {
+        return ResponseEntity.ok(missionService.escalateMission(id, request));
     }
 }

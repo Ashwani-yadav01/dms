@@ -1,14 +1,16 @@
 package com.dms.rescueService.rescue.service.impl;
 
 import com.dms.common.events.RescueMissionStatusUpdatedEvent;
-import com.dms.rescueService.rescue.dto.request.MissionStatusUpdateRequest;
+import com.dms.rescueService.rescue.dto.request.MissionActionRequest;
 import com.dms.rescueService.rescue.dto.response.RescueMissionResponse;
 import com.dms.rescueService.rescue.entity.MissionStatus;
 import com.dms.rescueService.rescue.entity.RescueDepartment;
 import com.dms.rescueService.rescue.entity.RescueMission;
 import com.dms.rescueService.rescue.repository.RescueDepartmentRepository;
 import com.dms.rescueService.rescue.repository.RescueMissionRepository;
+import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueMissionService;
+import com.dms.rescueService.rescue.state.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,44 +29,113 @@ public class RescueMissionServiceImpl implements RescueMissionService {
 
     private final RescueMissionRepository missionRepository;
     private final RescueDepartmentRepository departmentRepository;
+    private final RedisGeoService redisGeoService;
     private final KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String statusTopic;
 
+    // --- AUTOMATED GPS TELEMETRY PROCESSING ---
     @Override
     @Transactional
-    public RescueMissionResponse updateMissionStatus(UUID missionId, MissionStatusUpdateRequest request) {
+    public void processLocationTelemetry(UUID missionId, double latitude, double longitude) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
 
+        if (mission.getStatus() == MissionStatus.COMPLETED || mission.getStatus() == MissionStatus.CANCELLED) {
+            return;
+        }
+
+        UUID unitId = mission.getDepartment().getId();
+        UUID incidentId = mission.getIncidentId();
+
+        redisGeoService.updateUnitLocation(unitId, longitude, latitude);
+
+        MissionState currentState = mapStatusToState(mission.getStatus());
+        double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(unitId, incidentId);
+
+        MissionState newState = currentState.handleLocationTick(distanceMeters);
+
+        if (newState.getStatus() != mission.getStatus()) {
+            executeTransition(mission, newState.getStatus(), "Automated GPS Telemetry transition");
+        }
+    }
+
+    // --- DEDICATED API ACTION HANDLERS ---
+
+    @Override
+    @Transactional
+    public RescueMissionResponse completeMission(UUID missionId, MissionActionRequest request) {
+        RescueMission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+
+        MissionState currentState = mapStatusToState(mission.getStatus());
+        MissionState newState = currentState.complete(); // Throws IllegalStateException if NOT ON_SCENE
+
+        executeTransition(mission, newState.getStatus(), request.getNotes());
+        return mapToResponse(mission);
+    }
+
+    @Override
+    @Transactional
+    public RescueMissionResponse cancelMission(UUID missionId, MissionActionRequest request) {
+        RescueMission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+
+        MissionState currentState = mapStatusToState(mission.getStatus());
+        MissionState newState = currentState.cancel(); // Validated via State Pattern
+
+        String notes = request.getReason() != null ? "Cancelled: " + request.getReason() : request.getNotes();
+        executeTransition(mission, newState.getStatus(), notes);
+        return mapToResponse(mission);
+    }
+
+    @Override
+    @Transactional
+    public RescueMissionResponse escalateMission(UUID missionId, MissionActionRequest request) {
+        RescueMission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+
+        MissionState currentState = mapStatusToState(mission.getStatus());
+        MissionState newState = currentState.escalate(); // Validated via State Pattern
+
+        executeTransition(mission, newState.getStatus(), request.getNotes());
+        return mapToResponse(mission);
+    }
+
+    // --- CENTRAL STATE TRANSITION EXECUTION ---
+    private void executeTransition(RescueMission mission, MissionStatus newStatus, String notes) {
         MissionStatus oldStatus = mission.getStatus();
-        MissionStatus newStatus = request.getStatus();
-
-        if (oldStatus == newStatus) {
-            return mapToResponse(mission);
-        }
-
         mission.setStatus(newStatus);
-        if (request.getNotes() != null && !request.getNotes().isBlank()) {
-            mission.setNotes(request.getNotes().trim());
+
+        if (notes != null && !notes.isBlank()) {
+            mission.setNotes(notes);
         }
 
-        // Handle terminal states: free up department capacity
+        // Clean spatial RAM cache & free department capacity on terminal states
         if (newStatus == MissionStatus.COMPLETED || newStatus == MissionStatus.CANCELLED) {
             if (oldStatus != MissionStatus.COMPLETED && oldStatus != MissionStatus.CANCELLED) {
                 mission.setCompletedAt(LocalDateTime.now());
                 releaseDepartmentCapacity(mission.getDepartment());
+                redisGeoService.removeSpatialData(mission.getDepartment().getId(), mission.getIncidentId());
             }
         }
 
         RescueMission updated = missionRepository.save(mission);
-        log.info("Transitioned Mission ID: {} status from {} to {}", missionId, oldStatus, newStatus);
+        log.info("Transitioned Mission ID: {} from {} to {}", mission.getId(), oldStatus, newStatus);
 
-        // Publish event to Kafka for IncidentService to consume
         publishStatusUpdateEvent(updated);
+    }
 
-        return mapToResponse(updated);
+    private MissionState mapStatusToState(MissionStatus status) {
+        return switch (status) {
+            case DISPATCHED -> new DispatchedState();
+            case EN_ROUTE -> new EnRouteState();
+            case ON_SCENE -> new OnSceneState();
+            case ESCALATED -> new EscalatedState();
+            case COMPLETED -> new CompletedState();
+            case CANCELLED -> new CancelledState();
+        };
     }
 
     private void publishStatusUpdateEvent(RescueMission mission) {

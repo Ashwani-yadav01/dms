@@ -1,6 +1,6 @@
 package com.dms.rescueService.rescue.config;
 
-import com.dms.common.events.RescueMissionCompletedEvent;
+import com.dms.common.events.RescueMissionStatusUpdatedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -23,7 +23,7 @@ public class KafkaProducerConfig {
     private String bootstrapServers;
 
     @Bean
-    public ProducerFactory<String, RescueMissionCompletedEvent> producerFactory() {
+    public ProducerFactory<String, RescueMissionStatusUpdatedEvent> producerFactory() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
@@ -31,17 +31,15 @@ public class KafkaProducerConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-
-        // Disable type headers via property key
         props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
 
-        JsonSerializer<RescueMissionCompletedEvent> valueSerializer = new JsonSerializer<>(objectMapper);
+        JsonSerializer<RescueMissionStatusUpdatedEvent> valueSerializer = new JsonSerializer<>(objectMapper);
 
         return new DefaultKafkaProducerFactory<>(props, new StringSerializer(), valueSerializer);
     }
 
     @Bean
-    public KafkaTemplate<String, RescueMissionCompletedEvent> kafkaTemplate() {
+    public KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 }

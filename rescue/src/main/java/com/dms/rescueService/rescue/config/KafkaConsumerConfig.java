@@ -29,7 +29,7 @@ public class KafkaConsumerConfig {
     private String groupId;
 
     @Bean
-    public ConsumerFactory<String, IncidentCreatedEvent> consumerFactory() {
+    public ConsumerFactory<String, IncidentCreatedEvent> incidentConsumerFactory() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
@@ -51,11 +51,11 @@ public class KafkaConsumerConfig {
         return new DefaultKafkaConsumerFactory<>(props, keyDeserializer, valueDeserializer);
     }
 
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, IncidentCreatedEvent> kafkaListenerContainerFactory() {
+    @Bean(name = "incidentKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, IncidentCreatedEvent> incidentKafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, IncidentCreatedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory());
+        factory.setConsumerFactory(incidentConsumerFactory());
         return factory;
     }
 }

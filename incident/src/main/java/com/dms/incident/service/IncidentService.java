@@ -38,6 +38,7 @@ public interface IncidentService {
 
     void processRescueMissionCompletion(UUID incidentId, UUID missionId, String resolutionNotes);
 
-    void updateStatusFromRescueEvent(UUID incidentId, String status, String notes);
+    void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes);
+
     void notifyEndUser(UUID incidentId, String status, String notes);
 }

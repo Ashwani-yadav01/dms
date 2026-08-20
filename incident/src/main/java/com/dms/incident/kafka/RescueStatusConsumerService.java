@@ -25,13 +25,12 @@ public class RescueStatusConsumerService {
 
         String statusName = event.getStatus() != null ? event.getStatus(): null;
 
-        incidentService.updateStatusFromRescueEvent(
+        incidentService.updateIncidentStatusFromRescue(
                 event.getIncidentId(),
                 statusName,
                 event.getNotes()
         );
 
-        // 2. Push real-time event to End User
-//        incidentService.notifyEndUser(event.getIncidentId(), event.getStatus(), event.getNotes());
+        incidentService.notifyEndUser(event.getIncidentId(), event.getStatus(), event.getNotes());
     }
 }

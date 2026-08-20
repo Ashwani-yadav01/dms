@@ -2,8 +2,11 @@ package com.dms.rescueService.rescue.controller;
 
 import com.dms.rescueService.rescue.dto.request.MissionActionRequest;
 import com.dms.rescueService.rescue.dto.response.RescueMissionResponse;
+import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueMissionService;
 import jakarta.validation.Valid;
+import lombok.Builder;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class RescueMissionController {
 
     private final RescueMissionService missionService;
+    private final RedisGeoService redisGeoService;
 
     // --- READ ENDPOINTS ---
     @GetMapping("/{id}")
@@ -27,6 +31,34 @@ public class RescueMissionController {
     @GetMapping("/incident/{incidentId}")
     public ResponseEntity<List<RescueMissionResponse>> getMissionsByIncidentId(@PathVariable UUID incidentId) {
         return ResponseEntity.ok(missionService.getMissionsByIncidentId(incidentId));
+    }
+
+    /**
+     * High-speed status check reading directly from Redis spatial cache.
+     */
+    @GetMapping("/{id}/live-status")
+    public ResponseEntity<LiveMissionStatusResponse> getLiveMissionStatus(
+            @PathVariable UUID id,
+            @RequestParam UUID incidentId) {
+
+        String cachedStatus = redisGeoService.getCachedMissionStatus(id);
+        double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(id, incidentId);
+
+        // Handle case where team already arrived and spatial data was evicted from Redis
+        boolean isOnSceneOrCompleted = "ON_SCENE".equalsIgnoreCase(cachedStatus) || "COMPLETED".equalsIgnoreCase(cachedStatus);
+        boolean isWithinGeofence = isOnSceneOrCompleted || (distanceMeters <= 50.0);
+
+        double displayDistance = isOnSceneOrCompleted ? 0.0 : (Math.round(distanceMeters * 100.0) / 100.0);
+
+        LiveMissionStatusResponse response = LiveMissionStatusResponse.builder()
+                .missionId(id)
+                .incidentId(incidentId)
+                .status(cachedStatus)
+                .distanceToIncidentMeters(displayDistance)
+                .isWithinGeofence(isWithinGeofence)
+                .build();
+
+        return ResponseEntity.ok(response);
     }
 
     // --- DEDICATED ACTION ENDPOINTS ---
@@ -60,5 +92,16 @@ public class RescueMissionController {
             @PathVariable UUID id,
             @Valid @RequestBody MissionActionRequest request) {
         return ResponseEntity.ok(missionService.escalateMission(id, request));
+    }
+
+    // --- RESPONSE DTO FOR LIVE STATUS ---
+    @Data
+    @Builder
+    public static class LiveMissionStatusResponse {
+        private UUID missionId;
+        private UUID incidentId;
+        private String status;
+        private double distanceToIncidentMeters;
+        private boolean isWithinGeofence;
     }
 }

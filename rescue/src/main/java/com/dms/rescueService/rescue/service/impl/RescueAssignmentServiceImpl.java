@@ -25,7 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RescueAssignmentServiceImpl implements RescueAssignmentService {
-
+// dues  when have not figured out how we will assgin the leader assigned leader is currently reported user
     private final RescueDepartmentRepository departmentRepository;
     private final RescueMissionRepository missionRepository;
     private final RedisGeoService redisGeoService;
@@ -43,10 +43,11 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
                 event.getIncidentId(), event.getLatitude(), event.getLongitude());
 
         // 1. Register incident location in Redis GEO for live tracking telemetry
+        // Fixed parameter order: latitude first, longitude second
         redisGeoService.registerIncidentLocation(
                 event.getIncidentId(),
-                event.getLongitude(),
-                event.getLatitude()
+                event.getLatitude(),
+                event.getLongitude()
         );
 
         // 2. Query DB directly for available departments within radius ordered by distance
@@ -74,25 +75,36 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         RescueMission mission = RescueMission.builder()
                 .incidentId(event.getIncidentId())
                 .department(assignedDept)
+                .assignedLeaderId(event.getReportedBy())
                 .status(MissionStatus.DISPATCHED)
                 .notes(String.format("Auto-assigned to %s (Dist: %.2f km)", assignedDept.getName(), distanceKm))
                 .build();
 
         RescueMission savedMission = missionRepository.save(mission);
 
-        // 4. Update Department Capacity & Availability State
+        // 4. Seed initial Redis state
+        redisGeoService.cacheMissionStatus(savedMission.getId(), MissionStatus.DISPATCHED.name());
+
+        redisGeoService.updateUnitLocation(
+                savedMission.getId(),
+                assignedDept.getLatitude(),
+                assignedDept.getLongitude()
+        );
+
+        // 5. Update Department Capacity & Availability State
         updateDepartmentCapacity(assignedDept);
 
-        // 5. Notify Incident Service via Kafka
+        // 6. Notify Incident Service via Kafka
         publishStatusEvent(savedMission.getIncidentId(), savedMission.getId(), MissionStatus.DISPATCHED.name(), savedMission.getNotes());
 
-        log.info("Successfully assigned Incident ID: [{}] to Department: [{}] (Dist: %.2f km)",
-                event.getIncidentId(), assignedDept.getName(), distanceKm);
+        // Fixed SLF4J logger format specifier from %.2f to {}
+        log.info("Successfully assigned Incident ID: [{}] to Department: [{}] (Dist: {} km)",
+                event.getIncidentId(), assignedDept.getName(), String.format("%.2f", distanceKm));
     }
 
-    @Override
+
     @Transactional
-    public RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId) {
+    public RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId, double incidentLat, double incidentLon) {
         log.info("Manual assignment requested for Incident ID: [{}] to Department ID: [{}]", incidentId, departmentId);
 
         RescueDepartment department = departmentRepository.findById(departmentId)
@@ -102,6 +114,9 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
             throw new IllegalStateException("Department " + department.getName() + " is currently at maximum capacity.");
         }
 
+        // Register incident target location in Redis GEO for distance calculations
+        redisGeoService.registerIncidentLocation(incidentId, incidentLat, incidentLon);
+
         RescueMission mission = RescueMission.builder()
                 .incidentId(incidentId)
                 .department(department)
@@ -110,11 +125,28 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
                 .build();
 
         RescueMission savedMission = missionRepository.save(mission);
+
+        // Seed initial Redis cache state
+        redisGeoService.cacheMissionStatus(savedMission.getId(), MissionStatus.DISPATCHED.name());
+
+        redisGeoService.updateUnitLocation(
+                savedMission.getId(),
+                department.getLatitude(),
+                department.getLongitude()
+        );
+
         updateDepartmentCapacity(department);
 
         publishStatusEvent(savedMission.getIncidentId(), savedMission.getId(), MissionStatus.DISPATCHED.name(), savedMission.getNotes());
 
         return savedMission;
+    }
+
+    @Override
+    @Transactional
+    public RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId) {
+        // Fallback overload to satisfy legacy interface calls without coordinates
+        return assignDepartmentToIncident(incidentId, departmentId, 0.0, 0.0);
     }
 
     private void updateDepartmentCapacity(RescueDepartment department) {

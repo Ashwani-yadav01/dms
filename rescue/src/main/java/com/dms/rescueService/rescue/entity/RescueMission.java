@@ -39,7 +39,16 @@ public class RescueMission {
     @Builder.Default
     @Column(nullable = false)
     private Integer slaMinutes = 120;
+// Inside RescueMission.java
 
+    @Column(name = "arrival_latitude")
+    private Double arrivalLatitude;
+
+    @Column(name = "arrival_longitude")
+    private Double arrivalLongitude;
+
+    @Column(name = "arrived_at")
+    private LocalDateTime arrivedAt;
     @Builder.Default
     @Column(nullable = false)
     private Boolean isSlaBreached = false;

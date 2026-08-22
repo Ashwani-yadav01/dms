@@ -8,6 +8,7 @@ import com.dms.rescueService.rescue.entity.RescueMission;
 import com.dms.rescueService.rescue.exception.DepartmentNotFoundException;
 import com.dms.rescueService.rescue.repository.RescueDepartmentRepository;
 import com.dms.rescueService.rescue.repository.RescueMissionRepository;
+import com.dms.rescueService.rescue.service.DepartmentService;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueAssignmentService;
 import lombok.RequiredArgsConstructor;
@@ -25,11 +26,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RescueAssignmentServiceImpl implements RescueAssignmentService {
-// dues  when have not figured out how we will assgin the leader assigned leader is currently reported user
+
     private final RescueDepartmentRepository departmentRepository;
     private final RescueMissionRepository missionRepository;
     private final RedisGeoService redisGeoService;
-    private final KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final DepartmentService departmentService;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String rescueStatusTopic;
@@ -43,7 +45,6 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
                 event.getIncidentId(), event.getLatitude(), event.getLongitude());
 
         // 1. Register incident location in Redis GEO for live tracking telemetry
-        // Fixed parameter order: latitude first, longitude second
         redisGeoService.registerIncidentLocation(
                 event.getIncidentId(),
                 event.getLatitude(),
@@ -71,11 +72,14 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
                 assignedDept.getLatitude(), assignedDept.getLongitude()
         );
 
+        // Resolve available station chief
+        UUID leaderId = departmentService.resolveAndOccupyChief(assignedDept.getId());
+
         // 3. Create and persist Rescue Mission
         RescueMission mission = RescueMission.builder()
                 .incidentId(event.getIncidentId())
                 .department(assignedDept)
-                .assignedLeaderId(event.getReportedBy())
+                .assignedLeaderId(leaderId)
                 .status(MissionStatus.DISPATCHED)
                 .notes(String.format("Auto-assigned to %s (Dist: %.2f km)", assignedDept.getName(), distanceKm))
                 .build();
@@ -85,8 +89,9 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         // 4. Seed initial Redis state
         redisGeoService.cacheMissionStatus(savedMission.getId(), MissionStatus.DISPATCHED.name());
 
+        // ✅ FIX 1: Pass Department ID so Redis spatial key matches Telemetry Service updates
         redisGeoService.updateUnitLocation(
-                savedMission.getId(),
+                assignedDept.getId(),
                 assignedDept.getLatitude(),
                 assignedDept.getLongitude()
         );
@@ -97,12 +102,11 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         // 6. Notify Incident Service via Kafka
         publishStatusEvent(savedMission.getIncidentId(), savedMission.getId(), MissionStatus.DISPATCHED.name(), savedMission.getNotes());
 
-        // Fixed SLF4J logger format specifier from %.2f to {}
-        log.info("Successfully assigned Incident ID: [{}] to Department: [{}] (Dist: {} km)",
-                event.getIncidentId(), assignedDept.getName(), String.format("%.2f", distanceKm));
+        log.info("Successfully assigned Incident ID: [{}] to Department: [{}] (Dist: {} km) with Leader ID: [{}]",
+                event.getIncidentId(), assignedDept.getName(), String.format("%.2f", distanceKm), leaderId);
     }
 
-
+    @Override
     @Transactional
     public RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId, double incidentLat, double incidentLon) {
         log.info("Manual assignment requested for Incident ID: [{}] to Department ID: [{}]", incidentId, departmentId);
@@ -114,12 +118,16 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
             throw new IllegalStateException("Department " + department.getName() + " is currently at maximum capacity.");
         }
 
+        // Resolve available station chief
+        UUID leaderId = departmentService.resolveAndOccupyChief(departmentId);
+
         // Register incident target location in Redis GEO for distance calculations
         redisGeoService.registerIncidentLocation(incidentId, incidentLat, incidentLon);
 
         RescueMission mission = RescueMission.builder()
                 .incidentId(incidentId)
                 .department(department)
+                .assignedLeaderId(leaderId)
                 .status(MissionStatus.DISPATCHED)
                 .notes("Manually assigned by dispatcher operator.")
                 .build();
@@ -129,8 +137,9 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         // Seed initial Redis cache state
         redisGeoService.cacheMissionStatus(savedMission.getId(), MissionStatus.DISPATCHED.name());
 
+        // ✅ FIX 1: Pass Department ID so Redis spatial key matches Telemetry Service updates
         redisGeoService.updateUnitLocation(
-                savedMission.getId(),
+                department.getId(),
                 department.getLatitude(),
                 department.getLongitude()
         );
@@ -145,7 +154,6 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
     @Override
     @Transactional
     public RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId) {
-        // Fallback overload to satisfy legacy interface calls without coordinates
         return assignDepartmentToIncident(incidentId, departmentId, 0.0, 0.0);
     }
 

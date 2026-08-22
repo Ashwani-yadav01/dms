@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class IncidentEventPublisher {
 
-    private final KafkaTemplate<String, IncidentCreatedEvent> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Value("${application.kafka.topic.incident-created}")
     private String topicName;

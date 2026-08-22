@@ -2,6 +2,7 @@ package com.dms.rescueService.rescue.controller;
 
 import com.dms.rescueService.rescue.dto.request.DepartmentCreateRequest;
 import com.dms.rescueService.rescue.dto.request.DepartmentUpdateRequest;
+import com.dms.rescueService.rescue.dto.request.StationChiefRegisterRequest;
 import com.dms.rescueService.rescue.dto.response.DepartmentResponse;
 import com.dms.rescueService.rescue.service.DepartmentService;
 import jakarta.validation.Valid;
@@ -73,5 +74,13 @@ public class RescueDepartmentController {
     public ResponseEntity<Void> deleteDepartment(@PathVariable UUID id) {
         departmentService.deleteDepartment(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // --- REGISTER STATION CHIEF ---
+    @PostMapping("/{id}/chiefs")
+    public ResponseEntity<DepartmentResponse> registerStationChief(
+            @PathVariable UUID id,
+            @Valid @RequestBody StationChiefRegisterRequest request) {
+        return new ResponseEntity<>(departmentService.registerStationChief(id, request), HttpStatus.CREATED);
     }
 }

@@ -24,6 +24,7 @@ public class DepartmentResponse {
     private Integer totalCapacity;
     private Integer activeMissionsCount;
     private Boolean isAvailable;
+    private UUID stationChiefId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

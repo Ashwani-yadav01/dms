@@ -2,12 +2,15 @@ package com.dms.rescueService.rescue.controller;
 
 import com.dms.rescueService.rescue.dto.request.MissionActionRequest;
 import com.dms.rescueService.rescue.dto.response.RescueMissionResponse;
+import com.dms.rescueService.rescue.entity.RescueMission;
 import com.dms.rescueService.rescue.service.RedisGeoService;
+import com.dms.rescueService.rescue.service.RescueAssignmentService;
 import com.dms.rescueService.rescue.service.RescueMissionService;
 import jakarta.validation.Valid;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +24,19 @@ public class RescueMissionController {
 
     private final RescueMissionService missionService;
     private final RedisGeoService redisGeoService;
+    private final RescueAssignmentService assignmentService;
+
+    // --- MANUAL DISPATCH ---
+    @PostMapping("/dispatch")
+    public ResponseEntity<RescueMissionResponse> dispatchManually(
+            @RequestParam UUID incidentId,
+            @RequestParam UUID departmentId,
+            @RequestParam(required = false, defaultValue = "0.0") double lat,
+            @RequestParam(required = false, defaultValue = "0.0") double lon) {
+
+        RescueMission mission = assignmentService.assignDepartmentToIncident(incidentId, departmentId, lat, lon);
+        return new ResponseEntity<>(mapToResponse(mission), HttpStatus.CREATED);
+    }
 
     // --- READ ENDPOINTS ---
     @GetMapping("/{id}")
@@ -94,7 +110,26 @@ public class RescueMissionController {
         return ResponseEntity.ok(missionService.escalateMission(id, request));
     }
 
-    // --- RESPONSE DTO FOR LIVE STATUS ---
+    // --- PRIVATE HELPER MAPPER ---
+    private RescueMissionResponse mapToResponse(RescueMission m) {
+        return RescueMissionResponse.builder()
+                .id(m.getId())
+                .incidentId(m.getIncidentId())
+                .departmentId(m.getDepartment().getId())
+                .departmentName(m.getDepartment().getName())
+                .assignedLeaderId(m.getAssignedLeaderId())
+                .status(m.getStatus())
+                .slaMinutes(m.getSlaMinutes())
+                .isSlaBreached(m.getIsSlaBreached())
+                .dispatchedAt(m.getDispatchedAt())
+                .completedAt(m.getCompletedAt())
+                .notes(m.getNotes())
+                .createdAt(m.getCreatedAt())
+                .updatedAt(m.getUpdatedAt())
+                .build();
+    }
+
+    // --- DTO FOR LIVE STATUS ---
     @Data
     @Builder
     public static class LiveMissionStatusResponse {

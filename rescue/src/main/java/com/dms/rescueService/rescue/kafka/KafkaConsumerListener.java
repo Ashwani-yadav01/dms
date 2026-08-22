@@ -21,10 +21,9 @@ public class KafkaConsumerListener {
     )
     public void consumeIncidentCreatedEvent(IncidentCreatedEvent event) {
         log.info("Received Kafka event for Incident ID: {}", event.getIncidentId());
-        try {
-            rescueAssignmentService.autoAssignRescueTeam(event);
-        } catch (Exception e) {
-            log.error("Failed to execute auto-dispatch for Incident ID: {}", event.getIncidentId(), e);
-        }
+
+        // Let the exception bubble up!
+        // If this throws, Spring Kafka will catch it, trigger the 3 retries, and then send to DLQ.
+        rescueAssignmentService.autoAssignRescueTeam(event);
     }
 }

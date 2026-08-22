@@ -3,13 +3,16 @@ package com.dms.rescueService.rescue.service.impl;
 import com.dms.common.events.IncidentCreatedEvent;
 import com.dms.rescueService.rescue.dto.request.DepartmentCreateRequest;
 import com.dms.rescueService.rescue.dto.request.DepartmentUpdateRequest;
+import com.dms.rescueService.rescue.dto.request.StationChiefRegisterRequest;
 import com.dms.rescueService.rescue.dto.response.DepartmentResponse;
 import com.dms.rescueService.rescue.entity.MissionStatus;
 import com.dms.rescueService.rescue.entity.RescueDepartment;
 import com.dms.rescueService.rescue.entity.RescueMission;
+import com.dms.rescueService.rescue.entity.RescuePersonnel;
 import com.dms.rescueService.rescue.exception.DepartmentNotFoundException;
 import com.dms.rescueService.rescue.repository.RescueDepartmentRepository;
 import com.dms.rescueService.rescue.repository.RescueMissionRepository;
+import com.dms.rescueService.rescue.repository.RescuePersonnelRepository;
 import com.dms.rescueService.rescue.service.DepartmentService;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueAssignmentService;
@@ -30,7 +33,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private final RescueDepartmentRepository departmentRepository;
     private final RescueMissionRepository missionRepository;
-
+    private final RescuePersonnelRepository personnelRepository; // Inject Repository
 
     @Transactional
     public void processAutoDispatchForIncident(IncidentCreatedEvent event) {
@@ -209,8 +212,70 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .totalCapacity(d.getTotalCapacity())
                 .activeMissionsCount(d.getActiveMissionsCount())
                 .isAvailable(d.getIsAvailable())
+                .stationChiefId(d.getStationChiefId())
                 .createdAt(d.getCreatedAt())
                 .updatedAt(d.getUpdatedAt())
                 .build();
+    }
+
+
+    @Override
+    @Transactional
+    public DepartmentResponse registerStationChief(UUID departmentId, StationChiefRegisterRequest request) {
+        RescueDepartment dept = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new DepartmentNotFoundException("Rescue Department not found with ID: " + departmentId));
+
+        RescuePersonnel chief = RescuePersonnel.builder()
+                .fullName(request.getFullName().trim())
+                .badgeNumber(request.getBadgeNumber().trim())
+                .phone(request.getPhone().trim())
+                .department(dept)
+                .isChief(true)
+                .isAvailable(true)
+                .build();
+
+        RescuePersonnel savedChief = personnelRepository.save(chief);
+
+        // Set as primary station chief if department currently has none
+        if (dept.getStationChiefId() == null) {
+            dept.setStationChiefId(savedChief.getId());
+        }
+
+        RescueDepartment updatedDept = departmentRepository.save(dept);
+        log.info("Registered new Chief [{}] (ID: {}) for Department [{}]",
+                savedChief.getFullName(), savedChief.getId(), dept.getName());
+
+        return mapToResponse(updatedDept);
+    }
+
+    @Override
+    @Transactional
+    public UUID resolveAndOccupyChief(UUID departmentId) {
+        RescueDepartment dept = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new DepartmentNotFoundException("Rescue Department not found with ID: " + departmentId));
+
+        // 1. Find available chief registered under department
+        List<RescuePersonnel> availableChiefs = personnelRepository.findAvailableChiefs(departmentId);
+
+        if (!availableChiefs.isEmpty()) {
+            RescuePersonnel assignedChief = availableChiefs.get(0);
+
+            // Mark chief as occupied so they aren't assigned simultaneously
+            assignedChief.setIsAvailable(false);
+            personnelRepository.save(assignedChief);
+
+            log.info("Assigned Chief [{}] (ID: {}) to mission in Department [{}]",
+                    assignedChief.getFullName(), assignedChief.getId(), dept.getName());
+            return assignedChief.getId();
+        }
+
+        // 2. Fall back to primary station chief or system fallback
+        if (dept.getStationChiefId() != null) {
+            log.warn("No free chiefs available for Department [{}]. Falling back to primary Station Chief.", dept.getName());
+            return dept.getStationChiefId();
+        }
+
+        log.warn("No chief available or configured for Department [{}]. Using default system leader ID.", dept.getName());
+        return UUID.fromString("00000000-0000-0000-0000-000000000000");
     }
 }

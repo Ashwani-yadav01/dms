@@ -1,6 +1,8 @@
 package com.dms.incident.config;
 
 import com.dms.common.events.RescueMissionStatusUpdatedEvent;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,25 +30,26 @@ public class KafkaConsumerConfig {
 
     @Bean
     public ConsumerFactory<String, RescueMissionStatusUpdatedEvent> rescueStatusConsumerFactory() {
+        // Explicitly register JavaTimeModule
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+
+        JsonDeserializer<RescueMissionStatusUpdatedEvent> jsonDeserializer =
+                new JsonDeserializer<>(RescueMissionStatusUpdatedEvent.class, objectMapper);
+        jsonDeserializer.addTrustedPackages("*");
+        jsonDeserializer.setUseTypeHeaders(false);
+
+        ErrorHandlingDeserializer<String> keyDeserializer =
+                new ErrorHandlingDeserializer<>(new StringDeserializer());
+
+        ErrorHandlingDeserializer<RescueMissionStatusUpdatedEvent> valueDeserializer =
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
-        // Key Deserializer
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        // Outer Error Handling Deserializer
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-
-        // Delegate Inner Deserializer to JsonDeserializer
-        props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
-
-        // JSON Configs
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
-        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, RescueMissionStatusUpdatedEvent.class.getName());
-        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
-
-        return new DefaultKafkaConsumerFactory<>(props);
+        return new DefaultKafkaConsumerFactory<>(props, keyDeserializer, valueDeserializer);
     }
 
     @Bean(name = "rescueStatusKafkaListenerContainerFactory")

@@ -24,4 +24,16 @@ public interface RescueAssignmentService {
      * @return The created or updated RescueMission entity.
      */
     RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId);
+
+    /**
+     * Manually assigns a mission to a specific department with incident coordinates
+     * for spatial distance calculations and Redis GEO tracking.
+     *
+     * @param incidentId   The target incident ID.
+     * @param departmentId The target rescue department ID.
+     * @param incidentLat  The incident latitude.
+     * @param incidentLon  The incident longitude.
+     * @return The created or updated RescueMission entity.
+     */
+    RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId, double incidentLat, double incidentLon);
 }

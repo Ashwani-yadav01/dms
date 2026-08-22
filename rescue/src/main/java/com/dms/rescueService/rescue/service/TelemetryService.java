@@ -21,7 +21,7 @@ public class TelemetryService {
 
     private final RedisGeoService redisGeoService;
     private final RescueMissionRepository missionRepository;
-    private final KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String rescueStatusTopic;

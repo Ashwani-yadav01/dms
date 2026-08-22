@@ -6,6 +6,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -36,7 +38,12 @@ public class RescueDepartment {
 
     @Column(nullable = false)
     private Double longitude;
+    // Inside RescueDepartment.java
+    @Column(name = "station_chief_id")
+    private UUID stationChiefId; // Default/Primary Chief ID
 
+    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
+    private List<RescuePersonnel> personnelList = new ArrayList<>();
     @Column(nullable = false)
     private String contactPhone;
 

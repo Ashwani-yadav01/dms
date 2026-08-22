@@ -8,6 +8,7 @@ import com.dms.rescueService.rescue.entity.RescueDepartment;
 import com.dms.rescueService.rescue.entity.RescueMission;
 import com.dms.rescueService.rescue.repository.RescueDepartmentRepository;
 import com.dms.rescueService.rescue.repository.RescueMissionRepository;
+import com.dms.rescueService.rescue.repository.RescuePersonnelRepository;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueMissionService;
 import com.dms.rescueService.rescue.state.*;
@@ -29,8 +30,9 @@ public class RescueMissionServiceImpl implements RescueMissionService {
 
     private final RescueMissionRepository missionRepository;
     private final RescueDepartmentRepository departmentRepository;
+    private final RescuePersonnelRepository personnelRepository;
     private final RedisGeoService redisGeoService;
-    private final KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String statusTopic;
@@ -112,11 +114,12 @@ public class RescueMissionServiceImpl implements RescueMissionService {
             mission.setNotes(notes);
         }
 
-        // Clean spatial RAM cache & free department capacity on terminal states
+        // Clean spatial RAM cache & free department capacity/assigned personnel on terminal states
         if (newStatus == MissionStatus.COMPLETED || newStatus == MissionStatus.CANCELLED) {
             if (oldStatus != MissionStatus.COMPLETED && oldStatus != MissionStatus.CANCELLED) {
                 mission.setCompletedAt(LocalDateTime.now());
                 releaseDepartmentCapacity(mission.getDepartment());
+                releaseAssignedChief(mission.getAssignedLeaderId());
                 redisGeoService.removeSpatialData(mission.getDepartment().getId(), mission.getIncidentId());
             }
         }
@@ -125,6 +128,19 @@ public class RescueMissionServiceImpl implements RescueMissionService {
         log.info("Transitioned Mission ID: {} from {} to {}", mission.getId(), oldStatus, newStatus);
 
         publishStatusUpdateEvent(updated);
+    }
+
+    private void releaseAssignedChief(UUID assignedLeaderId) {
+        if (assignedLeaderId == null) {
+            return;
+        }
+
+        personnelRepository.findById(assignedLeaderId).ifPresent(chief -> {
+            chief.setIsAvailable(true);
+            personnelRepository.save(chief);
+            log.info("Released Station Chief [{}] (ID: {}) back to available pool.",
+                    chief.getFullName(), chief.getId());
+        });
     }
 
     private MissionState mapStatusToState(MissionStatus status) {

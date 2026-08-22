@@ -3,6 +3,7 @@ package com.dms.rescueService.rescue.service;
 import com.dms.common.events.IncidentCreatedEvent;
 import com.dms.rescueService.rescue.dto.request.DepartmentCreateRequest;
 import com.dms.rescueService.rescue.dto.request.DepartmentUpdateRequest;
+import com.dms.rescueService.rescue.dto.request.StationChiefRegisterRequest;
 import com.dms.rescueService.rescue.dto.response.DepartmentResponse;
 
 import java.util.List;
@@ -18,4 +19,6 @@ public interface DepartmentService {
     List<DepartmentResponse> getDepartmentsByJurisdiction(String jurisdictionCode);
     List<DepartmentResponse> findNearbyDepartments(Double lat, Double lng, Double radiusKm);
     void deleteDepartment(UUID id);
+    DepartmentResponse registerStationChief(UUID departmentId, StationChiefRegisterRequest request);
+    UUID resolveAndOccupyChief(UUID departmentId);
 }

@@ -6,6 +6,7 @@ import org.springframework.data.geo.Point;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,6 +42,7 @@ public class RedisGeoService {
     public void registerIncidentLocation(UUID incidentId, double latitude, double longitude) {
         // Point constructor takes (X, Y) -> (longitude, latitude)
         redisTemplate.opsForGeo().add(KEY_INCIDENTS, new Point(longitude, latitude), incidentId.toString());
+        redisTemplate.expire(KEY_INCIDENTS, Duration.ofHours(24));
         log.debug("Registered Incident location in Redis GEO for ID: [{}] -> ({}, {})", incidentId, latitude, longitude);
     }
 

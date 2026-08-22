@@ -1,6 +1,5 @@
 package com.dms.rescueService.rescue.config;
 
-import com.dms.common.events.RescueMissionStatusUpdatedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -22,8 +21,9 @@ public class KafkaProducerConfig {
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
 
+    // CHANGED: Generic type is now Object
     @Bean
-    public ProducerFactory<String, RescueMissionStatusUpdatedEvent> producerFactory() {
+    public ProducerFactory<String, Object> producerFactory() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
@@ -33,13 +33,16 @@ public class KafkaProducerConfig {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
         props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
 
-        JsonSerializer<RescueMissionStatusUpdatedEvent> valueSerializer = new JsonSerializer<>(objectMapper);
+        // CHANGED: Generic type is now Object
+        JsonSerializer<Object> valueSerializer = new JsonSerializer<>(objectMapper);
 
         return new DefaultKafkaProducerFactory<>(props, new StringSerializer(), valueSerializer);
     }
 
+    // CHANGED: Generic type is now Object.
+    // This is the exact bean your KafkaConsumerConfig is looking for!
     @Bean
-    public KafkaTemplate<String, RescueMissionStatusUpdatedEvent> kafkaTemplate() {
+    public KafkaTemplate<String, Object> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 }

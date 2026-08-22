@@ -14,7 +14,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RescueMissionStatusUpdatedEvent implements Serializable {
-
     private UUID missionId;
     private UUID incidentId;
     private UUID departmentId;

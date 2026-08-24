@@ -2,6 +2,7 @@ package com.dms.rescueService.rescue.service.impl;
 
 import com.dms.common.events.IncidentCreatedEvent;
 import com.dms.common.events.RescueMissionStatusUpdatedEvent;
+import com.dms.common.events.VictimsExtractedEvent;
 import com.dms.rescueService.rescue.entity.MissionStatus;
 import com.dms.rescueService.rescue.entity.RescueDepartment;
 import com.dms.rescueService.rescue.entity.RescueMission;
@@ -35,7 +36,8 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String rescueStatusTopic;
-
+    @Value("${app.kafka.topics.victims-extracted:victims-extracted-topic}")
+    private String victimsExtractedTopic;
     private static final double SEARCH_RADIUS_KM = 50.0;
 
     @Override
@@ -178,7 +180,46 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
 
         kafkaTemplate.send(rescueStatusTopic, incidentId.toString(), statusEvent);
     }
+    @Override
+    @Transactional
+    public RescueMission completeRescueMission(UUID missionId, int victimsRescued) {
+        log.info("Completing Rescue Mission ID: [{}] with {} victims extracted", missionId, victimsRescued);
 
+        // 1. Fetch and update mission
+        RescueMission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new IllegalArgumentException("Rescue Mission not found with ID: " + missionId));
+
+        mission.setStatus(MissionStatus.COMPLETED);
+        mission.setNotes("Mission completed successfully. " + victimsRescued + " victims extracted and en route to hospital.");
+        mission = missionRepository.save(mission);
+
+        // 2. Free up Department Capacity
+        RescueDepartment department = mission.getDepartment();
+        department.setActiveMissionsCount(Math.max(0, department.getActiveMissionsCount() - 1));
+        department.setIsAvailable(true); // They have at least 1 slot open now
+        departmentRepository.save(department);
+
+        // 3. Free up the Station Chief (Assuming departmentService handles this)
+        // departmentService.releaseChief(mission.getAssignedLeaderId());
+
+        // 4. Update Redis cache state
+        redisGeoService.cacheMissionStatus(mission.getId(), MissionStatus.COMPLETED.name());
+
+        // 5. Notify the Incident Service (Your existing logic)
+        publishStatusEvent(mission.getIncidentId(), mission.getId(), MissionStatus.COMPLETED.name(), mission.getNotes());
+
+        // 6. 🚨 BRIDGE TO HOSPITAL SERVICE: Alert them that victims are coming!
+        VictimsExtractedEvent hospitalEvent = VictimsExtractedEvent.builder()
+                .missionId(mission.getId())
+                .incidentId(mission.getIncidentId())
+                .totalVictims(victimsRescued)
+                .build();
+
+        kafkaTemplate.send(victimsExtractedTopic, mission.getIncidentId().toString(), hospitalEvent);
+
+        log.info("Successfully alerted Hospital Service to prepare beds for {} victims.", victimsRescued);
+        return mission;
+    }
     private double calculateDistanceInKm(double lat1, double lon1, double lat2, double lon2) {
         final int EARTH_RADIUS = 6371;
         double latDistance = Math.toRadians(lat2 - lat1);

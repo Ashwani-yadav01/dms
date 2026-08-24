@@ -83,11 +83,22 @@ public class RescueMissionController {
      * Complete a mission (e.g., field unit submits final proof/notes).
      * Enforces State Pattern: Must be ON_SCENE to complete.
      */
+    /**
+     * Complete a mission (e.g., field unit submits final proof/notes).
+     * This will also trigger the VictimsExtractedEvent to the Hospital Service!
+     */
     @PostMapping("/{id}/complete")
     public ResponseEntity<RescueMissionResponse> completeMission(
             @PathVariable UUID id,
             @Valid @RequestBody MissionActionRequest request) {
-        return ResponseEntity.ok(missionService.completeMission(id, request));
+
+        // Default to 0 if the field team doesn't specify
+        int victims = request.getVictimsRescued() != null ? request.getVictimsRescued() : 0;
+
+        // Call the service method we just built with Kafka!
+        RescueMission mission = assignmentService.completeRescueMission(id, victims);
+
+        return ResponseEntity.ok(mapToResponse(mission));
     }
 
     /**

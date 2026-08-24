@@ -36,4 +36,6 @@ public interface RescueAssignmentService {
      * @return The created or updated RescueMission entity.
      */
     RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId, double incidentLat, double incidentLon);
+
+ RescueMission completeRescueMission(UUID missionId, int victimsRescued);
 }

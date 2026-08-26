@@ -12,20 +12,12 @@
         </processorPath>
         <module name="user" />
       </profile>
-      <profile name="Annotation profile for hospital" enabled="true">
-        <sourceOutputDir name="target/generated-sources/annotations" />
-        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="false">
-          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.46/lombok-1.18.46.jar" />
-        </processorPath>
-        <module name="notification" />
-      </profile>
       <profile name="Maven default annotation processors profile" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="hospital" />
+        <module name="logistics" />
         <module name="rescue" />
       </profile>
       <profile name="Annotation profile for incident-service" enabled="true">
@@ -36,6 +28,15 @@
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.34/lombok-1.18.34.jar" />
         </processorPath>
         <module name="incident" />
+      </profile>
+      <profile name="Annotation profile for logistics" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.46/lombok-1.18.46.jar" />
+        </processorPath>
+        <module name="notification" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
@@ -49,6 +50,7 @@
       <module name="auth" options="-parameters" />
       <module name="hospital" options="-parameters" />
       <module name="incident" options="-parameters" />
+      <module name="logistics" options="-parameters" />
       <module name="notification" options="-parameters" />
       <module name="rescue" options="-parameters" />
       <module name="resource" options="-parameters" />

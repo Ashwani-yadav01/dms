@@ -12,6 +12,7 @@
         <option value="$PROJECT_DIR$/resource/pom.xml" />
         <option value="$PROJECT_DIR$/shelter/pom.xml" />
         <option value="$PROJECT_DIR$/user/pom.xml" />
+        <option value="$PROJECT_DIR$/logistics/pom.xml" />
       </list>
     </option>
   </component>

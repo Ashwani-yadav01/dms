@@ -9,7 +9,7 @@
 		<relativePath/>
 	</parent>
 
-	<groupId>com.dms.logisticsService</groupId>
+	<groupId>com.dms.logisticsService.logistics</groupId>
 	<artifactId>logistics</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>logistics-service</name>

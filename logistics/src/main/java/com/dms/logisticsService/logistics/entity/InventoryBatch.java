@@ -1,7 +1,7 @@
-package com.dms.logistics.entity;
+package com.dms.logisticsService.logistics.entity;
 
-import com.dms.logistics.entity.enums.ItemType;
-import com.dms.logistics.entity.enums.TemperatureClass;
+import com.dms.logisticsService.logistics.entity.enums.ItemType;
+import com.dms.logisticsService.logistics.entity.enums.TemperatureClass;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

@@ -1,7 +1,7 @@
-package com.dms.logistics.repository;
+package com.dms.logisticsService.logistics.repository;
 
 
-import com.dms.logistics.entity.Warehouse;
+import com.dms.logisticsService.logistics.entity.Warehouse;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

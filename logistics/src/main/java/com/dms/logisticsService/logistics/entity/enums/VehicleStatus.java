@@ -1,4 +1,4 @@
-package com.dms.logistics.entity.enums;
+package com.dms.logisticsService.logistics.entity.enums;
 
 public enum VehicleStatus {
     AVAILABLE,

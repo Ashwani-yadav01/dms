@@ -1,7 +1,7 @@
-package com.dms.logistics.repository;
+package com.dms.logisticsService.logistics.repository;
 
-import com.dms.logistics.entity.TransportVehicle;
-import com.dms.logistics.entity.enums.VehicleStatus;
+import com.dms.logisticsService.logistics.entity.TransportVehicle;
+import com.dms.logisticsService.logistics.entity.enums.VehicleStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -10,7 +10,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Repository

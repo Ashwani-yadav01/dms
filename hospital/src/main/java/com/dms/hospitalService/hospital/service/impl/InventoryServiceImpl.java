@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -69,20 +70,35 @@ public class InventoryServiceImpl implements InventoryService {
 
         inventory = inventoryRepository.save(inventory);
 
+        // 🚀 UPDATED KAFKA TRIGGER FOR LOGISTICS SERVICE
         if (inventory.getCurrentQuantity() <= inventory.getCriticalThreshold()) {
+            Hospital hospital = inventory.getHospital(); // Get hospital for GPS coordinates
+
+            // Calculate how much Logistics should send (e.g., restock to 3x the critical threshold)
+            int requestedRestockQty = Math.max(50, (inventory.getCriticalThreshold() * 3) - inventory.getCurrentQuantity());
+
+            String urgency = inventory.getCurrentQuantity() == 0 ? "CRITICAL" : "HIGH";
+
             InventoryShortageAlertEvent alert = InventoryShortageAlertEvent.builder()
-                    .hospitalId(hospitalId)
-                    .itemType(inventory.getItemType())
-                    .currentQuantity(inventory.getCurrentQuantity())
-                    .criticalThreshold(inventory.getCriticalThreshold())
-                    .alertTime(LocalDateTime.now())
+                    .hospitalId(hospital.getId())
+                    .hospitalName(hospital.getName())             // Required for Logistics UI/Logs
+                    .hospitalLatitude(hospital.getLatitude())     // Required for Haversine Routing
+                    .hospitalLongitude(hospital.getLongitude())   // Required for Haversine Routing
+                    .itemType(inventory.getItemType().name())
+                    .currentStock(inventory.getCurrentQuantity())
+                    .requestedQuantity(requestedRestockQty)       // Tells Logistics how many units to dispatch
+                    .urgencyLevel(urgency)
+                    .incomingCasualtyCount(0)
+                    .timestamp(Instant.now())
                     .build();
+
             kafkaProducer.sendInventoryShortageAlert(alert);
+            log.info("🚨 Published automated restocking alert to Logistics for {} units of {}",
+                    requestedRestockQty, inventory.getItemType());
         }
 
         return mapToResponse(inventory);
     }
-
     @Override
     @Transactional(readOnly = true)
     public List<InventoryResponse> getHospitalInventory(UUID hospitalId) {

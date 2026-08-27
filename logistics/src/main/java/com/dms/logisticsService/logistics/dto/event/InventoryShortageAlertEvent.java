@@ -1,7 +1,8 @@
-package com.dms.hospitalService.hospital.kafka.event;
+package com.dms.logisticsService.logistics.dto.event;
 
-
+import com.dms.logisticsService.logistics.entity.enums.ItemType;
 import lombok.*;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,7 +17,7 @@ public class InventoryShortageAlertEvent {
     private String hospitalName;
     private Double hospitalLatitude;
     private Double hospitalLongitude;
-    private String itemType; // Using String here to avoid Enum mismatch across services
+    private ItemType itemType;
     private Integer currentStock;
     private Integer requestedQuantity;
     private String urgencyLevel; // LOW, MEDIUM, HIGH, CRITICAL

@@ -1,7 +1,7 @@
-package com.dms.logistics.repository;
+package com.dms.logisticsService.logistics.repository;
 
-import com.dms.logistics.entity.DispatchOrder;
-import com.dms.logistics.entity.enums.DispatchStatus;
+import com.dms.logisticsService.logistics.entity.DispatchOrder;
+import com.dms.logisticsService.logistics.entity.enums.DispatchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

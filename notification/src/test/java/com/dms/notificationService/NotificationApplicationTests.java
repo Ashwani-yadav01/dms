@@ -1,4 +1,4 @@
-package com.dms.notificationService.notification;
+package com.dms.notificationService;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

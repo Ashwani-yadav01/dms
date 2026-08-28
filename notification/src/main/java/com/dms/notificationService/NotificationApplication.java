@@ -1,4 +1,4 @@
-package com.dms.notificationService.notification;
+package com.dms.notificationService;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -4,6 +4,7 @@ import com.dms.userService.user.dto.response.UserResponse;
 import com.dms.userService.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -40,5 +41,15 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(@PathVariable UUID userId) {
         userService.deleteUser(userId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/nearby/emails")
+    public ResponseEntity<List<String>> getNearbyUserEmails(
+            @RequestParam Double latitude,
+            @RequestParam Double longitude,
+            @RequestParam(defaultValue = "5.0") Double radiusKm) {
+
+        List<String> emails = userService.findEmailsWithinRadius(latitude, longitude, radiusKm);
+        return ResponseEntity.ok(emails);
     }
 }

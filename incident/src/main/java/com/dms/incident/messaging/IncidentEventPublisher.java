@@ -15,13 +15,15 @@ public class IncidentEventPublisher {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Value("${application.kafka.topic.incident-created}")
-    private String topicName;
+    private String incidentCreatedTopic;
+
+
 
     public void publishIncidentCreated(IncidentCreatedEvent event) {
         log.info("Publishing IncidentCreatedEvent for Incident ID: {} to topic: {}",
-                event.getIncidentId(), topicName);
+                event.getIncidentId(), incidentCreatedTopic);
 
-        kafkaTemplate.send(topicName, event.getIncidentId().toString(), event)
+        kafkaTemplate.send(incidentCreatedTopic, event.getIncidentId().toString(), event)
                 .whenComplete((result, ex) -> {
                     if (ex == null) {
                         log.info("Successfully published IncidentCreatedEvent [ID: {}] at offset: {}",

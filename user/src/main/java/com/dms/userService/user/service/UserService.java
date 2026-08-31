@@ -15,8 +15,9 @@ public interface UserService {
 
     UserResponse getUserByMobile(String mobileNumber);
 
-//    Page<UserResponse> getAllUsers(Pageable pageable);
-       List<UserResponse> getAllUsers();
+    //    Page<UserResponse> getAllUsers(Pageable pageable);
+    List<UserResponse> getAllUsers();
 
+    public List<String> findEmailsWithinRadius(Double lat, Double lon, Double radiusKm);
     void deleteUser(UUID userId);
 }

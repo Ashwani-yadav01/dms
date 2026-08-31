@@ -4,6 +4,7 @@ package com.dms.userService.user.service.impl;
 import com.dms.userService.user.dto.response.UserResponse;
 import com.dms.userService.user.entity.User;
 import com.dms.userService.user.exception.UserNotFoundException;
+import com.dms.userService.user.repository.UserProfileRepository;
 import com.dms.userService.user.repository.UserRepository;
 import com.dms.userService.user.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.UUID;
 public class UserServiceImpl implements UserService {
     private final ModelMapper mapper;
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
 //    @Override
 //    public RegisterResponse createUser( RegisterRequest request) {
 //        if (userRepository.existsByEmail(request.getEmail())) {
@@ -57,6 +59,12 @@ public class UserServiceImpl implements UserService {
     @Override
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream().map(user -> mapper.map(user,UserResponse.class)).toList();
+    }
+
+    @Override
+    public List<String> findEmailsWithinRadius(Double lat, Double lon, Double radiusKm) {
+
+        return userRepository.findEmailsWithinRadius(lat, lon, radiusKm);
     }
 
 //    @Override

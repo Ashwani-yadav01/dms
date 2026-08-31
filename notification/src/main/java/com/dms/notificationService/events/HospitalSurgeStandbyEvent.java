@@ -1,4 +1,4 @@
-package com.dms.notificationService.dto.event;
+package com.dms.notificationService.events;
 
 import lombok.*;
 import java.time.LocalDateTime;

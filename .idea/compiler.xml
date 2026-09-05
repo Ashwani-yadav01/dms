@@ -20,6 +20,16 @@
         <module name="notification" />
         <module name="hospital" />
         <module name="rescue" />
+        <module name="notification-service" />
+      </profile>
+      <profile name="Annotation profile for api-gateway" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.46/lombok-1.18.46.jar" />
+        </processorPath>
+        <module name="api-gateway" />
       </profile>
       <profile name="Annotation profile for incident-service" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
@@ -39,11 +49,13 @@
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="api-gateway" options="-parameters" />
       <module name="auth" options="-parameters" />
       <module name="hospital" options="-parameters" />
       <module name="incident" options="-parameters" />
       <module name="logistics" options="-parameters" />
       <module name="notification" options="-parameters" />
+      <module name="notification-service" options="-parameters" />
       <module name="rescue" options="-parameters" />
       <module name="resource" options="-parameters" />
       <module name="shelter" options="-parameters" />

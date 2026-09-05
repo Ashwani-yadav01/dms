@@ -41,4 +41,6 @@ public class NotificationController {
         );
         return ResponseEntity.ok("Emergency test email dispatched to " + email);
     }
+
+
 }

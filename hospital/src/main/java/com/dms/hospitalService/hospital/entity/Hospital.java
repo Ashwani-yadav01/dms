@@ -23,7 +23,8 @@ public class Hospital {
 
     @Column(nullable = false)
     private String name;
-
+    @Column(nullable = false)
+    private String email;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private FacilityType type;

@@ -19,4 +19,6 @@ public interface InventoryService {
     List<InventoryResponse> getCriticalShortages();
 
     void deleteInventoryItem(UUID id);
+
+    void restockItemFromDispatch(UUID hospitalId, String itemType, int quantity);
 }

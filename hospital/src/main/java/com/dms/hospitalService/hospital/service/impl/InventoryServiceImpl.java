@@ -4,6 +4,7 @@ import com.dms.hospitalService.hospital.dto.request.InventoryCreateRequest;
 import com.dms.hospitalService.hospital.dto.request.InventoryUpdateRequest;
 import com.dms.hospitalService.hospital.dto.response.InventoryResponse;
 import com.dms.hospitalService.hospital.entity.Hospital;
+import com.dms.hospitalService.hospital.entity.InventoryItemType;
 import com.dms.hospitalService.hospital.entity.MedicalInventory;
 import com.dms.hospitalService.hospital.kafka.event.InventoryShortageAlertEvent;
 import com.dms.hospitalService.hospital.kafka.producer.HospitalKafkaProducer;
@@ -106,7 +107,43 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
+    @Override
+    @Transactional
+    public void restockItemFromDispatch(UUID hospitalId, String itemTypeName, int quantity) {
+        log.info("📦 Restocking inventory for hospital: {}, item: {}, qty: +{}",
+                hospitalId, itemTypeName, quantity);
 
+        InventoryItemType itemTypeEnum;
+        try {
+            itemTypeEnum = InventoryItemType.valueOf(itemTypeName.toUpperCase().trim());
+        } catch (IllegalArgumentException ex) {
+            log.error("Unknown ItemType: {}. Cannot restock inventory.", itemTypeName);
+            return;
+        }
+
+        // Use pessimistic lock to prevent race conditions during updates
+        inventoryRepository.findByHospitalIdAndItemTypeForUpdate(hospitalId, itemTypeEnum)
+                .ifPresentOrElse(inventory -> {
+                    int updatedQuantity = inventory.getCurrentQuantity() + quantity;
+                    inventory.setCurrentQuantity(updatedQuantity);
+                    inventoryRepository.save(inventory);
+                    log.info("✅ Restocked successfully. Hospital: {}, Item: {}, New Total: {}",
+                            hospitalId, itemTypeName, updatedQuantity);
+                }, () -> {
+                    log.warn("Inventory entry not found for Hospital: {} and Item: {}. Creating item initial baseline.",
+                            hospitalId, itemTypeName);
+                    Hospital hospital = hospitalRepository.findById(hospitalId)
+                            .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + hospitalId));
+
+                    MedicalInventory newInventory = MedicalInventory.builder()
+                            .hospital(hospital)
+                            .itemType(itemTypeEnum)
+                            .currentQuantity(quantity)
+                            .criticalThreshold(20) // Safe default threshold
+                            .build();
+                    inventoryRepository.save(newInventory);
+                });
+    }
     @Override
     @Transactional(readOnly = true)
     public List<InventoryResponse> getCriticalShortages() {

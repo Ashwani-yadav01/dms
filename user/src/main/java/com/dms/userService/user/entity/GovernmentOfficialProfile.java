@@ -1,38 +1,32 @@
 package com.dms.userService.user.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "government_official_profiles")
-@EntityListeners(AuditingEntityListener.class)
+@PrimaryKeyJoinColumn(name = "user_id")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@PrimaryKeyJoinColumn(name = "user_id")
 public class GovernmentOfficialProfile extends UserProfile {
 
     @Column(nullable = false)
     private String departmentName;
 
-    // Foreign reference to physical Rescue Department in Rescue Service
     @Column(name = "department_id")
     private UUID departmentId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private DepartmentCategory departmentCategory;
 
-    // --- OFFICIAL IDENTIFICATION & POSITION ---
     @Column(nullable = false)
     private String designation;
 
@@ -42,34 +36,26 @@ public class GovernmentOfficialProfile extends UserProfile {
     private String officialPhone;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private HierarchyLevel hierarchyLevel;
 
-    // --- HIERARCHY / REPORTING ---
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reports_to")
+    @JsonIgnore
     private GovernmentOfficialProfile reportsTo;
 
     @OneToMany(mappedBy = "reportsTo", fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<GovernmentOfficialProfile> subordinates = new ArrayList<>();
 
-    // --- ALLOCATION ENGINE FIELDS ---
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private OfficialStatus status = OfficialStatus.AVAILABLE;
 
-    private Double dutyRadiusKm = 25.0; // Max distance in KM official can respond from base coordinates
+    private Double dutyRadiusKm = 25.0;
 
     @Column(nullable = false)
-    private Boolean isVerified = false; // Verified flag for emergency assignments
+    private Boolean isVerified = false;
 
-    private String jurisdictionCode; // e.g. "DISTRICT_DEHRADUN"
-
-    // --- AUDITING (Handled automatically by AuditingEntityListener) ---
-    @CreatedDate
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
-    @LastModifiedDate
-    private LocalDateTime updatedAt;
+    private String jurisdictionCode;
 }

@@ -11,14 +11,17 @@ import com.dms.userService.user.security.CustomUserDetails;
 import com.dms.userService.user.security.JwtService;
 import com.dms.userService.user.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-
+    private final StringRedisTemplate redisTemplate;
     @Override
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
@@ -93,14 +96,27 @@ public class AuthServiceImpl implements AuthService {
                 .profileCompleted(user.isProfileCompleted())
                 .build();
     }
-
     @Override
     public void logout(String authorizationHeader) {
-
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
             throw new IllegalArgumentException("Invalid Authorization header");
         }
 
         String token = authorizationHeader.substring(7);
+
+        // 1. Calculate remaining time on the token
+        Date expirationDate = jwtService.extractExpiration(token);
+        long remainingTimeMillis = expirationDate.getTime() - System.currentTimeMillis();
+
+        // 2. If token is still valid, push it to the Redis blacklist
+        if (remainingTimeMillis > 0) {
+            String blacklistKey = "jwt_blacklist:" + token;
+            redisTemplate.opsForValue().set(
+                    blacklistKey,
+                    "revoked",
+                    remainingTimeMillis,
+                    TimeUnit.MILLISECONDS
+            );
+        }
     }
 }

@@ -12,8 +12,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,9 +27,10 @@ public class IncidentController {
     @PostMapping
     public ResponseEntity<IncidentResponse> createIncident(
             @Valid @RequestBody IncidentRequest request,
-            Authentication authentication
+            @RequestHeader("X-User-Id") String userIdHeader,
+            @RequestHeader("X-User-Role") String roleHeader
     ) {
-        UUID userId = extractUserId(authentication);
+        UUID userId = UUID.fromString(userIdHeader);
         IncidentResponse response = incidentService.createIncident(request, userId);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
@@ -54,15 +53,15 @@ public class IncidentController {
 
     @GetMapping("/my-reports")
     public ResponseEntity<Page<IncidentResponse>> getMyIncidents(
-            Authentication authentication,
+            @RequestHeader("X-User-Id") String userIdHeader,
             @PageableDefault(size = 10, sort = "createdAt") Pageable pageable
     ) {
-        UUID userId = extractUserId(authentication);
+        UUID userId = UUID.fromString(userIdHeader);
         Page<IncidentResponse> response = incidentService.getIncidentsByUser(userId, pageable);
         return ResponseEntity.ok(response);
     }
 
-    // --- Public Endpoints (Matched with /public/** in SecurityConfig) ---
+    // --- Public Endpoints ---
 
     @GetMapping("/public/active")
     public ResponseEntity<List<IncidentResponse>> getActiveIncidents() {
@@ -85,8 +84,13 @@ public class IncidentController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<IncidentResponse> updateStatus(
             @PathVariable UUID id,
-            @RequestParam IncidentStatus status
+            @RequestParam IncidentStatus status,
+            @RequestHeader("X-User-Role") String roleHeader
     ) {
+        // Example of simple role-based access control without Spring Security
+        if (!roleHeader.equals("GOVERNMENT_OFFICIAL") && !roleHeader.equals("DISTRICT_ADMIN")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         IncidentResponse response = incidentService.updateIncidentStatus(id, status);
         return ResponseEntity.ok(response);
     }
@@ -95,9 +99,9 @@ public class IncidentController {
     public ResponseEntity<IncidentResponse> updateIncident(
             @PathVariable UUID id,
             @Valid @RequestBody IncidentRequest request,
-            Authentication authentication
+            @RequestHeader("X-User-Id") String userIdHeader
     ) {
-        UUID userId = extractUserId(authentication);
+        UUID userId = UUID.fromString(userIdHeader);
         IncidentResponse response = incidentService.updateIncident(id, request, userId);
         return ResponseEntity.ok(response);
     }
@@ -105,31 +109,10 @@ public class IncidentController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteIncident(
             @PathVariable UUID id,
-            Authentication authentication
+            @RequestHeader("X-User-Id") String userIdHeader
     ) {
-        UUID userId = extractUserId(authentication);
+        UUID userId = UUID.fromString(userIdHeader);
         incidentService.deleteIncident(id, userId);
         return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Extracts and safely converts the principal stored in the Security Context to a UUID.
-     * Your JwtAuthenticationFilter stores a java.util.UUID directly as the Principal.
-     */
-    private UUID extractUserId(Authentication authentication) {
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new IllegalArgumentException("User authentication context is required");
-        }
-
-        Object principal = authentication.getPrincipal();
-
-        if (principal instanceof UUID uuid) {
-            return uuid;
-        }
-        if (principal instanceof String str) {
-            return UUID.fromString(str);
-        }
-
-        throw new IllegalStateException("Unexpected authentication principal type: " + principal.getClass().getName());
     }
 }

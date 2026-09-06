@@ -179,8 +179,7 @@ public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialP
         response.setDutyRadiusKm(profile.getDutyRadiusKm());
         response.setIsVerified(profile.getIsVerified());
         response.setJurisdictionCode(profile.getJurisdictionCode());
-        response.setCreatedAt(profile.getCreatedAt());
-        response.setUpdatedAt(profile.getUpdatedAt());
+
 
         if (profile.getReportsTo() != null) {
             response.setReportsToUserId(profile.getReportsTo().getId());

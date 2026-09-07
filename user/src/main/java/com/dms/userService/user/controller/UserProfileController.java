@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/users/{userId}/profile")
+@RequestMapping("/api/v1/users/profile")
 @RequiredArgsConstructor
 public class UserProfileController {
 
@@ -20,32 +20,34 @@ public class UserProfileController {
 
     @PostMapping
     public ResponseEntity<UserProfileResponse> createProfile(
-            @PathVariable UUID userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody UserProfileRequest request) {
         return new ResponseEntity<>(profileFacadeService.createProfile(userId, request), HttpStatus.CREATED);
     }
 
     @GetMapping
-    public ResponseEntity<UserProfileResponse> getProfile(@PathVariable UUID userId) {
+    public ResponseEntity<UserProfileResponse> getProfile(
+            @RequestHeader("X-User-Id") UUID userId) {
         return ResponseEntity.ok(profileFacadeService.getProfile(userId));
     }
 
     @PutMapping
     public ResponseEntity<UserProfileResponse> updateProfile(
-            @PathVariable UUID userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody UserProfileRequest request) {
         return ResponseEntity.ok(profileFacadeService.updateProfile(userId, request));
     }
 
     @PatchMapping("/photo")
     public ResponseEntity<UserProfileResponse> updateProfilePhoto(
-            @PathVariable UUID userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @RequestParam String profilePhotoUrl) {
         return ResponseEntity.ok(profileFacadeService.updatePhoto(userId, profilePhotoUrl));
     }
 
     @DeleteMapping
-    public ResponseEntity<Void> deleteProfile(@PathVariable UUID userId) {
+    public ResponseEntity<Void> deleteProfile(
+            @RequestHeader("X-User-Id") UUID userId) {
         profileFacadeService.deleteProfile(userId);
         return ResponseEntity.noContent().build();
     }

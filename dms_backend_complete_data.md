@@ -1,6 +1,5 @@
 # Disaster Management System (DMS) - Complete Technical Project Dossier
 
-> **Source analyzed:** uploaded `dms-main.zip`  
 > **Analysis principle:** this document describes what is actually present in the source tree. Features that are only configured, partially implemented, or absent are explicitly called out.
 
 ---
@@ -28,7 +27,7 @@ The strongest architectural idea in the project is the separation between:
 
 # 2. What the System Can Do
 
-## User and identity management
+## User Service
 
 - Register users.
 - Login with email/password.
@@ -43,7 +42,7 @@ The strongest architectural idea in the project is the separation between:
 - Search officials by department, hierarchy, employee ID, and jurisdiction-related information.
 - Find user email addresses within a geographic radius.
 
-## Incident management
+## Incident Service
 
 - Create disaster/incident reports.
 - Store incident type, severity, coordinates, description, reporter and status.
@@ -56,7 +55,7 @@ The strongest architectural idea in the project is the separation between:
 - Update/delete incidents.
 - Publish a Kafka `IncidentCreatedEvent` for non-duplicate incidents.
 
-## Rescue operations
+## Rescue Service
 
 - Register rescue departments.
 - Register station chiefs/personnel.
@@ -92,7 +91,7 @@ The strongest architectural idea in the project is the separation between:
 - Receive incident-created events and alert nearby hospitals for surge standby.
 - Include hospital elevation data and an elevation-based repository query for flood-related filtering.
 
-## Logistics
+## Logistics Service
 
 - Register warehouses.
 - Maintain warehouse locations.
@@ -110,7 +109,7 @@ The strongest architectural idea in the project is the separation between:
 - Publish `SupplyDispatchedEvent`.
 - Mark deliveries as delivered and release the vehicle.
 
-## Notifications
+## Notifications Service
 
 - Consume incident-created events.
 - Find users within a **5 km** radius of an incident.
@@ -188,20 +187,13 @@ The strongest architectural idea in the project is the separation between:
 | Component | Port | Main responsibility |
 |---|---:|---|
 | API Gateway | 8080 | Routing, CORS, JWT validation, Redis blacklist check |
-| User Service | 8081 (intended) | Identity, profiles, government hierarchy |
+| User Service | 8081  | Identity, profiles, government hierarchy |
 | Incident Service | 8082 | Disaster incident lifecycle |
 | Rescue Service | 8083 | Rescue departments, missions, telemetry |
 | Hospital Service | 8084 | Hospitals, beds, admissions, inventory |
 | Logistics Service | 8085 | Warehouses, stock, vehicles, dispatch |
 | Notification Service | 8086 | Kafka-driven email alerts and audit logs |
 
-### Important source-code observation
-
-The uploaded ZIP currently contains **configuration inconsistency in the User Service**. Its `application.properties` appears to contain API Gateway configuration and sets port `8080`, rather than a normal User Service configuration for port `8081`.
-
-This means the source as uploaded should be treated as requiring configuration cleanup before claiming a clean six-service runtime.
-
----
 
 # 5. Technology Stack
 

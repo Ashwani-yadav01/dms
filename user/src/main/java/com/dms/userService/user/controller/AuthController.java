@@ -31,11 +31,12 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            authService.logout(token);
-        }
+    public ResponseEntity<Void> logout(
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false)
+            String authHeader) {
+
+        authService.logout(authHeader);
+
         return ResponseEntity.noContent().build();
     }
 }

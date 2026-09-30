@@ -55,6 +55,15 @@ public class Incident {
     @Column(nullable = false)
     private String imageUrl;
 
+    @Column(name = "resolution_photo_url", length = 2048)
+    private String resolutionPhotoUrl;
+
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
+
+    @Column(name = "resolution_reason", columnDefinition = "TEXT")
+    private String resolutionReason;
+
     @Column(nullable = false, updatable = false)
     private UUID reportedBy;
 

@@ -18,6 +18,6 @@ public enum IncidentStatus {
      * Helper check to determine if an incident is closed.
      */
     public boolean isTerminal() {
-        return this == RESOLVED || this == REJECTED;
+        return this == RESOLVED || this == REJECTED || this == DUPLICATE;
     }
 }

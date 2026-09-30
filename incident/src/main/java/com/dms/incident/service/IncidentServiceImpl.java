@@ -7,6 +7,7 @@ import com.dms.incident.entity.Incident;
 import com.dms.incident.entity.IncidentStatus;
 import com.dms.incident.entity.Severity;
 import com.dms.incident.exception.IncidentNotFoundException;
+import com.dms.incident.exception.BadRequestException;
 import com.dms.incident.messaging.IncidentEventPublisher;
 import com.dms.incident.repository.IncidentRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,6 +33,7 @@ public class IncidentServiceImpl implements IncidentService {
     private final ModelMapper mapper;
     private final IncidentRepository repository;
     private final IncidentEventPublisher incidentEventPublisher;
+    private final CloudinaryImageService cloudinaryImageService;
 
     private static final double EARTH_RADIUS_KM = 6371.0;
     private static final double DUPLICATE_RADIUS_METERS = 50.0;
@@ -91,22 +94,6 @@ public class IncidentServiceImpl implements IncidentService {
         }
 
         Incident savedIncident = repository.save(newIncident);
-
-        if (savedIncident.getStatus() != IncidentStatus.DUPLICATE) {
-            IncidentCreatedEvent event = IncidentCreatedEvent.builder()
-                    .incidentId(savedIncident.getId())
-                    .title(savedIncident.getTitle())
-                    .description(savedIncident.getDescription())
-                    .incidentType(savedIncident.getIncidentType().name())
-                    .severity(savedIncident.getSeverity().name())
-                    .latitude(savedIncident.getLatitude())
-                    .longitude(savedIncident.getLongitude())
-                    .reportedBy(savedIncident.getReportedBy())
-                    .createdAt(savedIncident.getCreatedAt())
-                    .build();
-
-            incidentEventPublisher.publishIncidentCreated(event);
-        }
 
         return mapper.map(savedIncident, IncidentResponse.class);
     }
@@ -173,11 +160,69 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Override
     @Transactional
-    public IncidentResponse updateIncidentStatus(UUID id, IncidentStatus status) {
-        Incident incident = findIncidentEntityById(id);
-        incident.setStatus(status);
+    public IncidentResponse updateIncidentStatus(UUID id, IncidentStatus status, MultipartFile resolutionPhoto) {
+        Incident incident = findIncidentEntityForUpdate(id);
+        if (status != IncidentStatus.VERIFIED) {
+            throw new BadRequestException("Use the dedicated reject or resolve operation; officials can only verify a reported incident here.");
+        }
+        if (incident.getStatus() != IncidentStatus.REPORTED) {
+            throw new BadRequestException("Only reported incidents can be verified.");
+        }
+        incident.setStatus(IncidentStatus.VERIFIED);
         Incident updatedIncident = repository.save(incident);
+        publishIncidentCreatedEvent(updatedIncident);
         return mapper.map(updatedIncident, IncidentResponse.class);
+    }
+
+    private void publishIncidentCreatedEvent(Incident incident) {
+        IncidentCreatedEvent event = IncidentCreatedEvent.builder()
+                .incidentId(incident.getId())
+                .title(incident.getTitle())
+                .description(incident.getDescription())
+                .incidentType(incident.getIncidentType().name())
+                .severity(incident.getSeverity().name())
+                .latitude(incident.getLatitude())
+                .longitude(incident.getLongitude())
+                .reportedBy(incident.getReportedBy())
+                .createdAt(incident.getCreatedAt())
+                .build();
+        incidentEventPublisher.publishIncidentCreated(event);
+    }
+
+    @Override
+    @Transactional
+    public IncidentResponse rejectIncident(UUID id, String reason) {
+        Incident incident = findIncidentEntityForUpdate(id);
+        if (incident.getStatus() != IncidentStatus.REPORTED) {
+            throw new BadRequestException("Only reported incidents can be rejected.");
+        }
+        String cleanedReason = reason == null ? "" : reason.trim();
+        if (cleanedReason.isBlank()) {
+            throw new BadRequestException("A reason is required to reject an incident.");
+        }
+        incident.setRejectionReason(cleanedReason);
+        incident.setStatus(IncidentStatus.REJECTED);
+        return mapper.map(repository.save(incident), IncidentResponse.class);
+    }
+
+    @Override
+    @Transactional
+    public IncidentResponse resolveIncident(UUID id, MultipartFile resolutionPhoto, String reason) {
+        Incident incident = findIncidentEntityForUpdate(id);
+        if (incident.getStatus() != IncidentStatus.DISPATCHED) {
+            throw new BadRequestException("Only dispatched incidents can be resolved.");
+        }
+        String cleanedReason = reason == null ? "" : reason.trim();
+        if (cleanedReason.isBlank()) {
+            throw new BadRequestException("A resolution reason is required.");
+        }
+        if (resolutionPhoto == null || resolutionPhoto.isEmpty()) {
+            throw new BadRequestException("A resolution photo is required.");
+        }
+        incident.setResolutionPhotoUrl(cloudinaryImageService.upload(resolutionPhoto, "reliefops/resolutions"));
+        incident.setResolutionReason(cleanedReason);
+        incident.setStatus(IncidentStatus.RESOLVED);
+        return mapper.map(repository.save(incident), IncidentResponse.class);
     }
 
     @Override
@@ -202,7 +247,7 @@ public class IncidentServiceImpl implements IncidentService {
     @Override
     @Transactional
     public void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes) {
-        Incident incident = findIncidentEntityById(incidentId);
+        Incident incident = findIncidentEntityForUpdate(incidentId);
 
         if (incident.getStatus().isTerminal()) {
             log.info("Incident ID: {} is already in terminal state ({}). Skipping status transition from rescue event.",
@@ -210,11 +255,12 @@ public class IncidentServiceImpl implements IncidentService {
             return;
         }
 
-        try {
-            IncidentStatus newStatus = IncidentStatus.valueOf(status);
-            incident.setStatus(newStatus);
-        } catch (IllegalArgumentException e) {
-            log.warn("Received status string [{}] does not directly map to IncidentStatus enum. Retaining current status.", status);
+        if ("DISPATCHED".equalsIgnoreCase(status)) {
+            if (incident.getStatus() != IncidentStatus.VERIFIED) {
+                log.warn("Ignoring dispatch event for incident {} in status {}", incidentId, incident.getStatus());
+                return;
+            }
+            incident.setStatus(IncidentStatus.DISPATCHED);
         }
 
         if (notes != null && !notes.isBlank()) {
@@ -237,19 +283,21 @@ public class IncidentServiceImpl implements IncidentService {
             return;
         }
 
-        incident.setStatus(IncidentStatus.RESOLVED);
-
         String existingDescription = incident.getDescription() != null ? incident.getDescription() : "";
-        String noteSummary = String.format("\n[RESOLVED via Rescue Mission %s]: %s",
+        String noteSummary = String.format("\n[Rescue mission %s completed; awaiting official resolution]: %s",
                 missionId, resolutionNotes != null ? resolutionNotes : "Completed successfully.");
         incident.setDescription(existingDescription + noteSummary);
-
         repository.save(incident);
-        log.info("Incident ID: {} status updated to RESOLVED via Kafka event.", incidentId);
+        log.info("Rescue mission completion recorded for incident {} without changing its resolution status.", incidentId);
     }
 
     private Incident findIncidentEntityById(UUID id) {
         return repository.findById(id)
+                .orElseThrow(() -> new IncidentNotFoundException("Incident is not found with id " + id));
+    }
+
+    private Incident findIncidentEntityForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IncidentNotFoundException("Incident is not found with id " + id));
     }
 

@@ -22,6 +22,9 @@ public class IncidentResponse {
     private Double latitude;
     private Double longitude;
     private String imageUrl;
+    private String resolutionPhotoUrl;
+    private String rejectionReason;
+    private String resolutionReason;
     private Severity severity;
     private IncidentType incidentType;
     private IncidentStatus status;

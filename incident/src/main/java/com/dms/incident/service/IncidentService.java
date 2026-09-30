@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface IncidentService {
 
@@ -30,7 +31,11 @@ public interface IncidentService {
 
     List<IncidentResponse> getIncidentsInRadius(Double latitude, Double longitude, Double radiusInKm);
 
-    IncidentResponse updateIncidentStatus(UUID id, IncidentStatus status);
+    IncidentResponse updateIncidentStatus(UUID id, IncidentStatus status, MultipartFile resolutionPhoto);
+
+    IncidentResponse rejectIncident(UUID id, String reason);
+
+    IncidentResponse resolveIncident(UUID id, MultipartFile resolutionPhoto, String reason);
 
     IncidentResponse updateIncident(UUID id, IncidentRequest request, UUID userId);
 

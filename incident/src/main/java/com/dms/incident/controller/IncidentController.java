@@ -1,9 +1,12 @@
 package com.dms.incident.controller;
 
 import com.dms.incident.dto.request.IncidentRequest;
+import com.dms.incident.dto.request.IncidentRejectionRequest;
 import com.dms.incident.dto.response.IncidentResponse;
+import com.dms.incident.dto.response.PhotoUploadResponse;
 import com.dms.incident.entity.IncidentStatus;
 import com.dms.incident.entity.Severity;
+import com.dms.incident.service.CloudinaryImageService;
 import com.dms.incident.service.IncidentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +14,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +28,28 @@ import java.util.UUID;
 public class IncidentController {
 
     private final IncidentService incidentService;
+    private final CloudinaryImageService cloudinaryImageService;
+
+    @PostMapping(
+            path = "/photos",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<PhotoUploadResponse> uploadPhoto(
+            @RequestPart("photo") MultipartFile photo,
+            @RequestHeader("X-User-Id") String userIdHeader
+    ) {
+
+        UUID.fromString(userIdHeader);
+
+        String url = cloudinaryImageService.upload(
+                photo,
+                "reliefops/incidents"
+        );
+
+        return ResponseEntity.ok(
+                new PhotoUploadResponse(url)
+        );
+    }
 
     @PostMapping
     public ResponseEntity<IncidentResponse> createIncident(
@@ -85,14 +112,43 @@ public class IncidentController {
     public ResponseEntity<IncidentResponse> updateStatus(
             @PathVariable UUID id,
             @RequestParam IncidentStatus status,
+            @RequestParam(value = "photo", required = false) MultipartFile photo,
             @RequestHeader("X-User-Role") String roleHeader
     ) {
-        // Example of simple role-based access control without Spring Security
-        if (!roleHeader.equals("GOVERNMENT_OFFICIAL") && !roleHeader.equals("DISTRICT_ADMIN")) {
+        if (!isGovernmentOfficial(roleHeader)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        IncidentResponse response = incidentService.updateIncidentStatus(id, status);
+        IncidentResponse response = incidentService.updateIncidentStatus(id, status, photo);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<IncidentResponse> rejectIncident(
+            @PathVariable UUID id,
+            @Valid @RequestBody IncidentRejectionRequest request,
+            @RequestHeader("X-User-Role") String roleHeader
+    ) {
+        if (!isGovernmentOfficial(roleHeader)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(incidentService.rejectIncident(id, request.getReason()));
+    }
+
+    @PostMapping(path = "/{id}/resolve", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<IncidentResponse> resolveIncident(
+            @PathVariable UUID id,
+            @RequestPart("photo") MultipartFile photo,
+            @RequestParam("reason") String reason,
+            @RequestHeader("X-User-Role") String roleHeader
+    ) {
+        if (!isGovernmentOfficial(roleHeader)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(incidentService.resolveIncident(id, photo, reason));
+    }
+
+    private boolean isGovernmentOfficial(String role) {
+        return "GOVERNMENT_OFFICIAL".equalsIgnoreCase(role);
     }
 
     @PutMapping("/{id}")

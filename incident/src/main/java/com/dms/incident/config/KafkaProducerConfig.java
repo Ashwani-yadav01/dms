@@ -42,14 +42,30 @@ public class KafkaProducerConfig {
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
         Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+        props.put(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                bootstrapServers
+        );
+        props.put(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                StringSerializer.class
+        );
+        props.put(
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                JsonSerializer.class
+        );
+        props.put(
+                JsonSerializer.ADD_TYPE_INFO_HEADERS,
+                false
+        );
+        JsonSerializer<Object> valueSerializer =
+                new JsonSerializer<>(objectMapper);
 
-        JsonSerializer<Object> valueSerializer = new JsonSerializer<>(objectMapper);
-
-        return new DefaultKafkaProducerFactory<>(props, new StringSerializer(), valueSerializer);
+        return new DefaultKafkaProducerFactory<>(
+                props,
+                new StringSerializer(),
+                valueSerializer
+        );
     }
 
     @Bean

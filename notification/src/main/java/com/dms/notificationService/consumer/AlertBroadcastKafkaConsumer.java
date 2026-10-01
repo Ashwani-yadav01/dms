@@ -1,7 +1,7 @@
 package com.dms.notificationService.consumer;
 
-import com.dms.notificationService.events.IncidentCreatedEvent;
 import com.dms.notificationService.events.HospitalSurgeStandbyEvent;
+import com.dms.notificationService.events.IncidentCreatedEvent;
 import com.dms.notificationService.events.SupplyDispatchedEvent;
 import com.dms.notificationService.client.UserServiceClient;
 import com.dms.notificationService.service.NotificationDispatchService;
@@ -26,24 +26,46 @@ public class AlertBroadcastKafkaConsumer {
     @Value("${spring.mail.username}")
     private String defaultAdminEmail;
 
-    // 1. INCIDENT CREATED: Fetch nearby users from User Service & broadcast email
-    @KafkaListener(topics = "incident-created-topic", groupId = "notification-service-group")
-    public void consumeIncidentCreated(IncidentCreatedEvent event) {
-        log.info("📢 [Notification] Consumed IncidentCreatedEvent: ID={}, Title={}, Severity={}, Status={}",
-                event.getIncidentId(), event.getTitle(), event.getSeverity(), event.getStatus());
 
-        // Call User-Service via HTTP to find users within 5 km of the incident coordinates
-        List<String> targetEmails = userServiceClient.fetchNearbyUserEmails(
-                event.getLatitude(),
-                event.getLongitude(),
-                DEFAULT_HAZARD_RADIUS_KM
+    // =========================================================
+    // 1. INCIDENT CREATED
+    // =========================================================
+
+    @KafkaListener(
+            topics = "incident-created-topic",
+            groupId = "notification-service-group",
+            containerFactory = "incidentCreatedKafkaListenerContainerFactory"
+    )
+    public void consumeIncidentCreated(IncidentCreatedEvent event) {
+
+        log.info(
+                "📢 [Notification] Consumed IncidentCreatedEvent: ID={}, Title={}, Severity={}, Status={}",
+                event.getIncidentId(),
+                event.getTitle(),
+                event.getSeverity(),
+                event.getStatus()
         );
 
-        log.info("Found {} nearby citizen emails to notify for Incident ID: {}",
-                targetEmails != null ? targetEmails.size() : 0, event.getIncidentId());
+        // Fetch users within 5 km of the incident
+        List<String> targetEmails =
+                userServiceClient.fetchNearbyUserEmails(
+                        event.getLatitude(),
+                        event.getLongitude(),
+                        DEFAULT_HAZARD_RADIUS_KM
+                );
 
-        String zoneLocation = String.format("%s (Coordinates: [%.4f, %.4f])",
-                event.getTitle(), event.getLatitude(), event.getLongitude());
+        log.info(
+                "Found {} nearby citizen emails to notify for Incident ID: {}",
+                targetEmails != null ? targetEmails.size() : 0,
+                event.getIncidentId()
+        );
+
+        String zoneLocation = String.format(
+                "%s (Coordinates: [%.4f, %.4f])",
+                event.getTitle(),
+                event.getLatitude(),
+                event.getLongitude()
+        );
 
         String alertDetails = String.format(
                 "Severity: %s\nStatus: %s\nHazard Type: %s\nRadius Affected: %.1f km\n\nDetails:\n%s",
@@ -51,20 +73,29 @@ public class AlertBroadcastKafkaConsumer {
                 event.getStatus(),
                 event.getIncidentType(),
                 DEFAULT_HAZARD_RADIUS_KM,
-                event.getDescription() != null ? event.getDescription() : "Emergency alert in your area. Follow local safety procedures."
+                event.getDescription() != null
+                        ? event.getDescription()
+                        : "Emergency alert in your area. Follow local safety procedures."
         );
 
-        // Send to nearby users if found, otherwise forward copy to admin
+        // Send to nearby users
         if (targetEmails != null && !targetEmails.isEmpty()) {
+
             dispatchService.dispatchMassEvacuationAlert(
                     targetEmails,
                     event.getIncidentType(),
                     zoneLocation,
                     alertDetails
             );
+
         } else {
-            log.warn("No nearby users found within {} km. Forwarding alert to admin inbox: {}",
-                    DEFAULT_HAZARD_RADIUS_KM, defaultAdminEmail);
+
+            log.warn(
+                    "No nearby users found within {} km. Forwarding alert to admin inbox: {}",
+                    DEFAULT_HAZARD_RADIUS_KM,
+                    defaultAdminEmail
+            );
+
             dispatchService.dispatchMassEvacuationAlert(
                     List.of(defaultAdminEmail),
                     event.getIncidentType(),
@@ -74,10 +105,23 @@ public class AlertBroadcastKafkaConsumer {
         }
     }
 
+
+    // =========================================================
     // 2. HOSPITAL SURGE ADVISORY
-    @KafkaListener(topics = "hospital-standby-topic", groupId = "notification-service-group")
+    // =========================================================
+
+    @KafkaListener(
+            topics = "hospital-standby-topic",
+            groupId = "notification-service-group",
+            containerFactory = "hospitalStandbyKafkaListenerContainerFactory"
+    )
     public void consumeHospitalStandby(HospitalSurgeStandbyEvent event) {
-        log.info("🏥 [Notification] Consumed HospitalSurgeStandbyEvent for: {}", event.getHospitalName());
+
+        log.info(
+                "🏥 [Notification] Consumed HospitalSurgeStandbyEvent for: {}",
+                event.getHospitalName()
+        );
+
         dispatchService.dispatchHospitalStandbyAlert(
                 event.getHospitalEmail(),
                 event.getHospitalName(),
@@ -87,10 +131,23 @@ public class AlertBroadcastKafkaConsumer {
         );
     }
 
+
+    // =========================================================
     // 3. LOGISTICS DISPATCH
-    @KafkaListener(topics = "supply-dispatched-topic", groupId = "notification-service-group")
+    // =========================================================
+
+    @KafkaListener(
+            topics = "supply-dispatched-topic",
+            groupId = "notification-service-group",
+            containerFactory = "supplyDispatchedKafkaListenerContainerFactory"
+    )
     public void consumeSupplyDispatched(SupplyDispatchedEvent event) {
-        log.info("🚚 [Notification] Consumed SupplyDispatchedEvent for item: {}", event.getItemType());
+
+        log.info(
+                "🚚 [Notification] Consumed SupplyDispatchedEvent for item: {}",
+                event.getItemType()
+        );
+
         dispatchService.dispatchLogisticsArrivalAlert(
                 event.getReceiverEmail(),
                 event.getItemType(),

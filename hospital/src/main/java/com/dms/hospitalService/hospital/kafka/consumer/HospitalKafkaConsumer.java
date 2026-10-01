@@ -21,19 +21,29 @@ public class HospitalKafkaConsumer {
     private static final int DEFAULT_ESTIMATED_CASUALTIES = 15;
 
     // 1. Trigger when an incident is first reported
-    @KafkaListener(topics = "incident-created-topic", groupId = "hospital-service-group")
+    @KafkaListener(
+            topics = "incident-created-topic",
+            groupId = "hospital-service-group",
+            containerFactory = "incidentCreatedKafkaListenerContainerFactory"
+    )
     public void consumeIncidentCreated(IncidentCreatedEvent event) {
         log.info("🏥 [Hospital-Service] Incident detected: ID={}, Title='{}' at [{}, {}]",
-                event.getIncidentId(), event.getTitle(), event.getLatitude(), event.getLongitude());
+                event.getIncidentId(),
+                event.getTitle(),
+                event.getLatitude(),
+                event.getLongitude());
 
         if (event.getLatitude() == null || event.getLongitude() == null) {
-            log.warn("Incident {} is missing coordinates. Skipping hospital surge alert.", event.getIncidentId());
+            log.warn("Incident {} is missing coordinates. Skipping hospital surge alert.",
+                    event.getIncidentId());
             return;
         }
 
         hospitalSurgeService.alertNearbyHospitalsForIncident(
                 event.getIncidentId(),
-                event.getIncidentType() != null ? event.getIncidentType() : "DISASTER",
+                event.getIncidentType() != null
+                        ? event.getIncidentType()
+                        : "DISASTER",
                 event.getLatitude(),
                 event.getLongitude(),
                 DEFAULT_HOSPITAL_RADIUS_KM,

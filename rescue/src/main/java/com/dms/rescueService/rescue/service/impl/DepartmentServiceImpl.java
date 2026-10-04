@@ -16,6 +16,7 @@ import com.dms.rescueService.rescue.repository.RescuePersonnelRepository;
 import com.dms.rescueService.rescue.service.DepartmentService;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueAssignmentService;
+import com.dms.rescueService.rescue.security.RescueAuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final RescueDepartmentRepository departmentRepository;
     private final RescueMissionRepository missionRepository;
     private final RescuePersonnelRepository personnelRepository; // Inject Repository
+    private final RescueAuthorizationService authorization;
 
     @Transactional
     public void processAutoDispatchForIncident(IncidentCreatedEvent event) {
@@ -89,6 +91,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponse createDepartment(DepartmentCreateRequest request) {
+        authorization.requireDispatcher();
         RescueDepartment department = RescueDepartment.builder()
                 .name(request.getName().trim())
                 .type(request.getType())
@@ -109,6 +112,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponse updateDepartment(UUID id, DepartmentUpdateRequest request) {
+        authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
 
@@ -145,6 +149,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponse toggleAvailability(UUID id, Boolean isAvailable) {
+        authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
 
@@ -189,6 +194,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public void deleteDepartment(UUID id) {
+        authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
 
@@ -222,6 +228,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponse registerStationChief(UUID departmentId, StationChiefRegisterRequest request) {
+        authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new DepartmentNotFoundException("Rescue Department not found with ID: " + departmentId));
 

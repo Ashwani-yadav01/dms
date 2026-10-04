@@ -25,6 +25,9 @@ public interface IncidentRepository extends JpaRepository<Incident, UUID> {
 
     // Find all incidents reported by a specific user with pagination
     Page<Incident> findByReportedBy(UUID reportedBy, Pageable pageable);
+    Page<Incident> findByReportedByAndStatus(UUID reportedBy, IncidentStatus status, Pageable pageable);
+    Page<Incident> findByReportedByAndSeverity(UUID reportedBy, Severity severity, Pageable pageable);
+    Page<Incident> findByReportedByAndStatusAndSeverity(UUID reportedBy, IncidentStatus status, Severity severity, Pageable pageable);
 
     // Filter incidents by status
     Page<Incident> findByStatus(IncidentStatus status, Pageable pageable);
@@ -34,6 +37,35 @@ public interface IncidentRepository extends JpaRepository<Incident, UUID> {
 
     // Filter by both status and severity
     Page<Incident> findByStatusAndSeverity(IncidentStatus status, Severity severity, Pageable pageable);
+
+    @Query(value = """
+        SELECT i FROM Incident i
+        WHERE (:status IS NULL OR i.status = :status)
+          AND (:severity IS NULL OR i.severity = :severity)
+          AND (6371.0 * acos(greatest(-1.0, least(1.0,
+                cos(radians(:lat)) * cos(radians(i.latitude)) *
+                cos(radians(i.longitude) - radians(:lng)) +
+                sin(radians(:lat)) * sin(radians(i.latitude))
+          )))) <= :radiusInKm
+        """,
+        countQuery = """
+        SELECT count(i) FROM Incident i
+        WHERE (:status IS NULL OR i.status = :status)
+          AND (:severity IS NULL OR i.severity = :severity)
+          AND (6371.0 * acos(greatest(-1.0, least(1.0,
+                cos(radians(:lat)) * cos(radians(i.latitude)) *
+                cos(radians(i.longitude) - radians(:lng)) +
+                sin(radians(:lat)) * sin(radians(i.latitude))
+          )))) <= :radiusInKm
+        """)
+    Page<Incident> findWithinDutyArea(
+            @Param("lat") Double latitude,
+            @Param("lng") Double longitude,
+            @Param("radiusInKm") Double radiusInKm,
+            @Param("status") IncidentStatus status,
+            @Param("severity") Severity severity,
+            Pageable pageable
+    );
 
     // Fetch active incidents using Spring Data derived query (Type-safe, no hardcoded strings)
     List<Incident> findByStatusIn(List<IncidentStatus> statuses);

@@ -2,19 +2,25 @@ package com.dms.incident.service;
 
 import com.dms.common.events.IncidentCreatedEvent;
 import com.dms.incident.dto.request.IncidentRequest;
+import com.dms.incident.dto.request.AssignOfficialRequest;
 import com.dms.incident.dto.response.IncidentResponse;
 import com.dms.incident.entity.Incident;
 import com.dms.incident.entity.IncidentStatus;
+import com.dms.incident.entity.IncidentAction;
 import com.dms.incident.entity.Severity;
 import com.dms.incident.exception.IncidentNotFoundException;
 import com.dms.incident.exception.BadRequestException;
+import com.dms.incident.exception.IncidentAuthorizationException;
 import com.dms.incident.messaging.IncidentEventPublisher;
 import com.dms.incident.repository.IncidentRepository;
+import com.dms.incident.repository.IncidentAuditRepository;
+import com.dms.incident.entity.IncidentAudit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +40,8 @@ public class IncidentServiceImpl implements IncidentService {
     private final IncidentRepository repository;
     private final IncidentEventPublisher incidentEventPublisher;
     private final CloudinaryImageService cloudinaryImageService;
+    private final IncidentAuthorizationService authorization;
+    private final IncidentAuditRepository auditRepository;
 
     private static final double EARTH_RADIUS_KM = 6371.0;
     private static final double DUPLICATE_RADIUS_METERS = 50.0;
@@ -63,8 +71,10 @@ public class IncidentServiceImpl implements IncidentService {
     @Override
     @Transactional
     public IncidentResponse createIncident(IncidentRequest request, UUID userId) {
+        authorization.authorize(null, IncidentAction.CREATE);
+        UUID actorId = authorization.userId();
         Incident newIncident = mapper.map(request, Incident.class);
-        newIncident.setReportedBy(userId);
+        newIncident.setReportedBy(actorId);
         newIncident.setStatus(IncidentStatus.REPORTED);
 
         double radiusInKm = DUPLICATE_RADIUS_METERS / 1000.0;
@@ -94,6 +104,7 @@ public class IncidentServiceImpl implements IncidentService {
         }
 
         Incident savedIncident = repository.save(newIncident);
+        audit(savedIncident, actorId, "CREATE", null, savedIncident.getStatus());
 
         return mapper.map(savedIncident, IncidentResponse.class);
     }
@@ -101,44 +112,72 @@ public class IncidentServiceImpl implements IncidentService {
     @Override
     public IncidentResponse getIncidentById(UUID id) {
         Incident incident = findIncidentEntityById(id);
+        authorization.requireView(incident);
         return mapper.map(incident, IncidentResponse.class);
     }
 
     @Override
     public Page<IncidentResponse> getAllIncidents(Pageable pageable) {
-        return repository.findAll(pageable)
+        authorization.requireCitizenCreate();
+        return repository.findByReportedBy(authorization.userId(), pageable)
                 .map(entity -> mapper.map(entity, IncidentResponse.class));
     }
 
     @Override
     public Page<IncidentResponse> getIncidentsByUser(UUID userId, Pageable pageable) {
-        return repository.findByReportedBy(userId, pageable)
+        UUID actor = authorization.userId();
+        if (!actor.equals(userId)) throw new IncidentAuthorizationException("You are not authorized to perform this action.");
+        return repository.findByReportedBy(actor, pageable)
                 .map(entity -> mapper.map(entity, IncidentResponse.class));
     }
 
     @Override
     public Page<IncidentResponse> getIncidentsByStatus(IncidentStatus status, Pageable pageable) {
-        return repository.findByStatus(status, pageable)
+        authorization.requireCitizenCreate();
+        return repository.findByReportedByAndStatus(authorization.userId(), status, pageable)
                 .map(entity -> mapper.map(entity, IncidentResponse.class));
     }
 
     @Override
     public Page<IncidentResponse> getIncidentsBySeverity(Severity severity, Pageable pageable) {
-        return repository.findBySeverity(severity, pageable)
+        authorization.requireCitizenCreate();
+        return repository.findByReportedByAndSeverity(authorization.userId(), severity, pageable)
                 .map(entity -> mapper.map(entity, IncidentResponse.class));
     }
 
     @Override
     public Page<IncidentResponse> filterIncidents(IncidentStatus status, Severity severity, Pageable pageable) {
-        if (status != null && severity != null) {
-            return repository.findByStatusAndSeverity(status, severity, pageable)
-                    .map(entity -> mapper.map(entity, IncidentResponse.class));
-        } else if (status != null) {
-            return getIncidentsByStatus(status, pageable);
-        } else if (severity != null) {
-            return getIncidentsBySeverity(severity, pageable);
+        if ("CITIZEN".equals(authorization.role())) {
+            UUID actor = authorization.userId();
+            if (status != null && severity != null) {
+                return repository.findByReportedByAndStatusAndSeverity(actor, status, severity, pageable)
+                        .map(entity -> mapper.map(entity, IncidentResponse.class));
+            } else if (status != null) {
+                return repository.findByReportedByAndStatus(actor, status, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+            } else if (severity != null) {
+                return repository.findByReportedByAndSeverity(actor, severity, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+            }
+            return repository.findByReportedBy(actor, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
         }
-        return getAllIncidents(pageable);
+        if ("GOVERNMENT_OFFICIAL".equals(authorization.role())) {
+            authorization.requireVerifiedOfficial();
+            if (status != null && severity != null)
+                return repository.findByStatusAndSeverity(status, severity, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+            if (status != null)
+                return repository.findByStatus(status, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+            if (severity != null)
+                return repository.findBySeverity(severity, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+            return repository.findAll(pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+        }
+        if (!"RESCUE_TEAM".equals(authorization.role()))
+            throw new IncidentAuthorizationException("You are not authorized to perform this action.");
+        Page<Incident> candidates = repository.findAll(pageable);
+        List<IncidentResponse> visible = candidates.getContent().stream()
+                .filter(authorization::canView)
+                .filter(i -> status == null || i.getStatus() == status)
+                .filter(i -> severity == null || i.getSeverity() == severity)
+                .map(i -> mapper.map(i, IncidentResponse.class)).toList();
+        return new PageImpl<>(visible, pageable, visible.size());
     }
 
     @Override
@@ -162,14 +201,17 @@ public class IncidentServiceImpl implements IncidentService {
     @Transactional
     public IncidentResponse updateIncidentStatus(UUID id, IncidentStatus status, MultipartFile resolutionPhoto) {
         Incident incident = findIncidentEntityForUpdate(id);
+        authorization.authorize(incident, IncidentAction.VERIFY);
         if (status != IncidentStatus.VERIFIED) {
             throw new BadRequestException("Use the dedicated reject or resolve operation; officials can only verify a reported incident here.");
         }
         if (incident.getStatus() != IncidentStatus.REPORTED) {
             throw new BadRequestException("Only reported incidents can be verified.");
         }
+        IncidentStatus previous = incident.getStatus();
         incident.setStatus(IncidentStatus.VERIFIED);
         Incident updatedIncident = repository.save(incident);
+        audit(updatedIncident, authorization.userId(), "VERIFY", previous, updatedIncident.getStatus());
         publishIncidentCreatedEvent(updatedIncident);
         return mapper.map(updatedIncident, IncidentResponse.class);
     }
@@ -193,6 +235,7 @@ public class IncidentServiceImpl implements IncidentService {
     @Transactional
     public IncidentResponse rejectIncident(UUID id, String reason) {
         Incident incident = findIncidentEntityForUpdate(id);
+        authorization.authorize(incident, IncidentAction.REJECT);
         if (incident.getStatus() != IncidentStatus.REPORTED) {
             throw new BadRequestException("Only reported incidents can be rejected.");
         }
@@ -200,15 +243,19 @@ public class IncidentServiceImpl implements IncidentService {
         if (cleanedReason.isBlank()) {
             throw new BadRequestException("A reason is required to reject an incident.");
         }
+        IncidentStatus previous = incident.getStatus();
         incident.setRejectionReason(cleanedReason);
         incident.setStatus(IncidentStatus.REJECTED);
-        return mapper.map(repository.save(incident), IncidentResponse.class);
+        Incident saved = repository.save(incident);
+        audit(saved, authorization.userId(), "REJECT", previous, saved.getStatus());
+        return mapper.map(saved, IncidentResponse.class);
     }
 
     @Override
     @Transactional
     public IncidentResponse resolveIncident(UUID id, MultipartFile resolutionPhoto, String reason) {
         Incident incident = findIncidentEntityForUpdate(id);
+        authorization.authorize(incident, IncidentAction.RESOLVE);
         if (incident.getStatus() != IncidentStatus.DISPATCHED) {
             throw new BadRequestException("Only dispatched incidents can be resolved.");
         }
@@ -219,21 +266,26 @@ public class IncidentServiceImpl implements IncidentService {
         if (resolutionPhoto == null || resolutionPhoto.isEmpty()) {
             throw new BadRequestException("A resolution photo is required.");
         }
+        IncidentStatus previous = incident.getStatus();
         incident.setResolutionPhotoUrl(cloudinaryImageService.upload(resolutionPhoto, "reliefops/resolutions"));
         incident.setResolutionReason(cleanedReason);
         incident.setStatus(IncidentStatus.RESOLVED);
-        return mapper.map(repository.save(incident), IncidentResponse.class);
+        Incident saved = repository.save(incident);
+        audit(saved, authorization.userId(), "RESOLVE", previous, saved.getStatus());
+        return mapper.map(saved, IncidentResponse.class);
     }
 
     @Override
     @Transactional
     public IncidentResponse updateIncident(UUID id, IncidentRequest request, UUID userId) {
         Incident incident = findIncidentEntityById(id);
+        authorization.authorize(incident, IncidentAction.UPDATE);
 
+        IncidentStatus previous = incident.getStatus();
         mapper.map(request, incident);
-        incident.setReportedBy(userId);
 
         Incident updatedIncident = repository.save(incident);
+        audit(updatedIncident, authorization.userId(), "UPDATE", previous, updatedIncident.getStatus());
         return mapper.map(updatedIncident, IncidentResponse.class);
     }
 
@@ -241,13 +293,30 @@ public class IncidentServiceImpl implements IncidentService {
     @Transactional
     public void deleteIncident(UUID id, UUID userId) {
         Incident incident = findIncidentEntityById(id);
+        authorization.authorize(incident, IncidentAction.DELETE);
+        audit(incident, authorization.userId(), "DELETE", incident.getStatus(), null);
         repository.delete(incident);
     }
 
     @Override
     @Transactional
-    public void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes) {
+    public IncidentResponse assignOfficial(UUID incidentId, AssignOfficialRequest request) {
+        authorization.authorize(null, IncidentAction.ASSIGN_OFFICIAL);
         Incident incident = findIncidentEntityForUpdate(incidentId);
+        if (!incident.getStatus().isActive()) throw new BadRequestException("Only active incidents can be assigned.");
+        IncidentStatus previous = incident.getStatus();
+        incident.setAssignedOfficialId(request.getOfficialId());
+        Incident updated = repository.save(incident);
+        audit(updated, authorization.userId(), "ASSIGN_OFFICIAL", previous, updated.getStatus());
+        return mapper.map(updated, IncidentResponse.class);
+    }
+
+    @Override
+    @Transactional
+    public void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes, UUID departmentId, UUID performedBy) {
+        Incident incident = findIncidentEntityForUpdate(incidentId);
+        IncidentStatus previous = incident.getStatus();
+        UUID previousDepartmentId = incident.getAssignedDepartmentId();
 
         if (incident.getStatus().isTerminal()) {
             log.info("Incident ID: {} is already in terminal state ({}). Skipping status transition from rescue event.",
@@ -261,6 +330,7 @@ public class IncidentServiceImpl implements IncidentService {
                 return;
             }
             incident.setStatus(IncidentStatus.DISPATCHED);
+            if (departmentId != null) incident.setAssignedDepartmentId(departmentId);
         }
 
         if (notes != null && !notes.isBlank()) {
@@ -269,7 +339,17 @@ public class IncidentServiceImpl implements IncidentService {
         }
 
         Incident savedIncident = repository.save(incident);
+        if (previous != savedIncident.getStatus() || !java.util.Objects.equals(previousDepartmentId, savedIncident.getAssignedDepartmentId())) {
+            audit(savedIncident, performedBy,
+                    !java.util.Objects.equals(previousDepartmentId, savedIncident.getAssignedDepartmentId()) ? "ASSIGN_RESCUE_TEAM" : "RESCUE_STATUS",
+                    previous, savedIncident.getStatus());
+        }
         log.info("Updated Incident ID: {} status to {} based on Rescue Event.", incidentId, savedIncident.getStatus());
+    }
+
+    private void audit(Incident incident, UUID actor, String action, IncidentStatus previous, IncidentStatus next) {
+        auditRepository.save(new IncidentAudit(incident.getId(), actor, action,
+                previous == null ? null : previous.name(), next == null ? null : next.name()));
     }
 
     @Override

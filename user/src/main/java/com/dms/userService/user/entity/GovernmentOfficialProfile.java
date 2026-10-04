@@ -52,10 +52,19 @@ public class GovernmentOfficialProfile extends UserProfile {
     @Column(nullable = false, length = 20)
     private OfficialStatus status = OfficialStatus.AVAILABLE;
 
-    private Double dutyRadiusKm = 25.0;
+    private Double dutyRadiusKm = 20.0;
+
+    @Column(name = "duty_office_latitude")
+    private Double dutyOfficeLatitude;
+
+    @Column(name = "duty_office_longitude")
+    private Double dutyOfficeLongitude;
 
     @Column(nullable = false)
     private Boolean isVerified = false;
+
+    @Column(name = "government_profile_id", unique = true, updatable = false, length = 32)
+    private String governmentProfileId;
 
     private String jurisdictionCode;
 }

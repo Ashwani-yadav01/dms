@@ -12,6 +12,8 @@ import java.util.UUID;
 @Repository
 public interface RescueDepartmentRepository extends JpaRepository<RescueDepartment, UUID> {
 
+    java.util.Optional<RescueDepartment> findByName(String name);
+
     List<RescueDepartment> findByIsAvailableTrue();
 
     List<RescueDepartment> findByJurisdictionCode(String jurisdictionCode);

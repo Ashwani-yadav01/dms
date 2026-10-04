@@ -4,8 +4,13 @@ import com.dms.userService.user.dto.response.GovernmentOfficialProfileResponse;
 import com.dms.userService.user.entity.DepartmentCategory;
 import com.dms.userService.user.entity.HierarchyLevel;
 import com.dms.userService.user.entity.OfficialStatus;
+import com.dms.userService.user.entity.Role;
+import com.dms.userService.user.exception.UserNotFoundException;
+import com.dms.userService.user.repository.UserRepository;
+import com.dms.userService.user.security.JwtService;
 import com.dms.userService.user.service.GovernmentOfficialDomainService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +23,8 @@ import java.util.UUID;
 public class GovernmentOfficialController {
 
     private final GovernmentOfficialDomainService officialDomainService;
+    private final UserRepository userRepository;
+    private final JwtService jwtService;
 
     // --- SEARCH & HIERARCHY QUERIES ---
     @GetMapping("/employee/{employeeId}")
@@ -54,15 +61,38 @@ public class GovernmentOfficialController {
     @PatchMapping("/{userId}/status")
     public ResponseEntity<GovernmentOfficialProfileResponse> updateStatus(
             @PathVariable UUID userId,
+            @RequestHeader("Authorization") String authorization,
             @RequestParam OfficialStatus status) {
+        requireAdmin(authorization);
         return ResponseEntity.ok(officialDomainService.updateOfficialStatus(userId, status));
     }
 
     @PatchMapping("/{userId}/verify")
     public ResponseEntity<GovernmentOfficialProfileResponse> verifyOfficial(
             @PathVariable UUID userId,
+            @RequestHeader("Authorization") String authorization,
             @RequestParam boolean isVerified) {
+        requireAdmin(authorization);
         return ResponseEntity.ok(officialDomainService.verifyOfficial(userId, isVerified));
+    }
+
+    private void requireAdmin(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer "))
+            throw new AccessDeniedException("You are not authorized to perform this action.");
+        try {
+            String token = authorization.substring(7);
+            String id = jwtService.extractClaim(token, claims -> claims.get("userId", String.class));
+            UUID actorId = UUID.fromString(id);
+            Role role = userRepository.findById(actorId)
+                    .orElseThrow(() -> new UserNotFoundException("User not found"))
+                    .getRole();
+            if (role != Role.DISTRICT_ADMIN)
+                throw new AccessDeniedException("You are not authorized to perform this action.");
+        } catch (AccessDeniedException | UserNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AccessDeniedException("You are not authorized to perform this action.");
+        }
     }
 
     // --- ALLOCATION ELIGIBILITY LOOKUP ---

@@ -7,6 +7,7 @@ import com.dms.userService.user.entity.HierarchyLevel;
 import com.dms.userService.user.entity.OfficialStatus;
 import com.dms.userService.user.exception.ResourceNotFoundException;
 import com.dms.userService.user.exception.UserNotFoundException;
+import com.dms.userService.user.exception.BadRequestException;
 import com.dms.userService.user.repository.GovernmentOfficialProfileRepository;
 import com.dms.userService.user.service.GovernmentOfficialDomainService;
 import lombok.RequiredArgsConstructor;
@@ -98,6 +99,9 @@ public class GovernmentOfficialDomainServiceImpl implements GovernmentOfficialDo
     @Override
     @Transactional
     public GovernmentOfficialProfileResponse verifyOfficial(UUID userId, boolean isVerified) {
+        if (isVerified) {
+            throw new BadRequestException("Government officials can only be verified by matching an active government registry record.");
+        }
         GovernmentOfficialProfile profile = officialProfileRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("Official profile not found for user id: " + userId));
 

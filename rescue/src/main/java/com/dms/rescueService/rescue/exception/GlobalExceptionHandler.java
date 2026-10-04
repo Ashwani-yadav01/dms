@@ -20,6 +20,11 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(RescueAuthorizationException.class)
+    public ResponseEntity<ErrorResponse> handleRescueAuthorizationDenied(RescueAuthorizationException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", "You are not authorized to perform this action.", request.getRequestURI());
+    }
+
     // ==========================================
     // 404 NOT FOUND HANDLERS
     // ==========================================

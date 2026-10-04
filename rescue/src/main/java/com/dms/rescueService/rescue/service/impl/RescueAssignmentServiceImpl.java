@@ -12,6 +12,7 @@ import com.dms.rescueService.rescue.repository.RescueMissionRepository;
 import com.dms.rescueService.rescue.service.DepartmentService;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueAssignmentService;
+import com.dms.rescueService.rescue.security.RescueAuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,7 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
     private final RedisGeoService redisGeoService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final DepartmentService departmentService;
+    private final RescueAuthorizationService authorization;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String rescueStatusTopic;
@@ -102,7 +104,7 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         updateDepartmentCapacity(assignedDept);
 
         // 6. Notify Incident Service via Kafka
-        publishStatusEvent(savedMission.getIncidentId(), savedMission.getId(), MissionStatus.DISPATCHED.name(), savedMission.getNotes());
+        publishStatusEvent(savedMission);
 
         log.info("Successfully assigned Incident ID: [{}] to Department: [{}] (Dist: {} km) with Leader ID: [{}]",
                 event.getIncidentId(), assignedDept.getName(), String.format("%.2f", distanceKm), leaderId);
@@ -111,6 +113,7 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
     @Override
     @Transactional
     public RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId, double incidentLat, double incidentLon) {
+        authorization.requireDispatcher();
         log.info("Manual assignment requested for Incident ID: [{}] to Department ID: [{}]", incidentId, departmentId);
 
         RescueDepartment department = departmentRepository.findById(departmentId)
@@ -148,7 +151,7 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
 
         updateDepartmentCapacity(department);
 
-        publishStatusEvent(savedMission.getIncidentId(), savedMission.getId(), MissionStatus.DISPATCHED.name(), savedMission.getNotes());
+        publishStatusEvent(savedMission);
 
         return savedMission;
     }
@@ -170,15 +173,18 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         departmentRepository.save(department);
     }
 
-    private void publishStatusEvent(UUID incidentId, UUID missionId, String status, String notes) {
+    private void publishStatusEvent(RescueMission mission) {
         RescueMissionStatusUpdatedEvent statusEvent = RescueMissionStatusUpdatedEvent.builder()
-                .incidentId(incidentId)
-                .missionId(missionId)
-                .status(MissionStatus.fromString(status).orElse(MissionStatus.DISPATCHED))
-                .notes(notes)
+                .incidentId(mission.getIncidentId())
+                .missionId(mission.getId())
+                .departmentId(mission.getDepartment().getId())
+                .assignedLeaderId(mission.getAssignedLeaderId())
+                .performedBy(authorization.currentUserIdOrNull())
+                .status(mission.getStatus())
+                .notes(mission.getNotes())
                 .build();
 
-        kafkaTemplate.send(rescueStatusTopic, incidentId.toString(), statusEvent);
+        kafkaTemplate.send(rescueStatusTopic, mission.getIncidentId().toString(), statusEvent);
     }
     @Override
     @Transactional
@@ -188,6 +194,7 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         // 1. Fetch and update mission
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new IllegalArgumentException("Rescue Mission not found with ID: " + missionId));
+        authorization.requireAssignedTeam(mission);
 
         mission.setStatus(MissionStatus.COMPLETED);
         mission.setNotes("Mission completed successfully. " + victimsRescued + " victims extracted and en route to hospital.");
@@ -206,7 +213,7 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         redisGeoService.cacheMissionStatus(mission.getId(), MissionStatus.COMPLETED.name());
 
         // 5. Notify the Incident Service (Your existing logic)
-        publishStatusEvent(mission.getIncidentId(), mission.getId(), MissionStatus.COMPLETED.name(), mission.getNotes());
+        publishStatusEvent(mission);
 
         // 6. 🚨 BRIDGE TO HOSPITAL SERVICE: Alert them that victims are coming!
         VictimsExtractedEvent hospitalEvent = VictimsExtractedEvent.builder()

@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -65,6 +67,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                    Map<String, Object> trustedClaims = new HashMap<>(claims);
+                    authenticationToken.setDetails(trustedClaims);
 
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                 }

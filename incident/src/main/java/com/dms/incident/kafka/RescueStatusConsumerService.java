@@ -28,7 +28,9 @@ public class RescueStatusConsumerService {
         incidentService.updateIncidentStatusFromRescue(
                 event.getIncidentId(),
                 statusName,
-                event.getNotes()
+                event.getNotes(),
+                event.getDepartmentId(),
+                event.getPerformedBy()
         );
 
         incidentService.notifyEndUser(event.getIncidentId(), event.getStatus(), event.getNotes());

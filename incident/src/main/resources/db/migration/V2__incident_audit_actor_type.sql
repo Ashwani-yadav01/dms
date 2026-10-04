@@ -1,0 +1,2 @@
+ALTER TABLE incident_audit_log ALTER COLUMN performed_by DROP NOT NULL;
+ALTER TABLE incident_audit_log ADD COLUMN IF NOT EXISTS actor_type VARCHAR(16) NOT NULL DEFAULT 'SYSTEM';

@@ -7,6 +7,8 @@ import com.dms.userService.user.exception.UserAlreadyExistsException;
 import com.dms.userService.user.exception.UserNotFoundException;
 import com.dms.userService.user.exception.BadRequestException;
 import com.dms.userService.user.repository.UserProfileRepository;
+import com.dms.userService.user.repository.UserRepository;
+import com.dms.userService.user.entity.Role;
 import com.dms.userService.user.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,16 +21,19 @@ import java.util.UUID;
 public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
 
     private final UserProfileRepository userProfileRepository;
+    private final UserRepository userRepository;
 
     // Role-specific sub-services
     private final CitizenProfileService citizenProfileService;
     private final VolunteerProfileService volunteerProfileService;
     private final NGOProfileService ngoProfileService;
     private final GovernmentOfficialProfileService governmentOfficialProfileService;
+    private final RescueTeamProfileService rescueTeamProfileService;
 
     @Override
     @Transactional
     public UserProfileResponse createProfile(UUID userId, UserProfileRequest request) {
+        enforceRoleMatches(userId, request);
         // Prevent duplicate profile creation
         if (userProfileRepository.existsById(userId)) {
             throw new UserAlreadyExistsException("Profile already exists for user ID: " + userId);
@@ -54,6 +59,8 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             return ngoProfileService.getProfile(userId);
         } else if (governmentOfficialProfileService.existsById(userId)) {
             return governmentOfficialProfileService.getProfile(userId);
+        } else if (rescueTeamProfileService.existsById(userId)) {
+            return rescueTeamProfileService.getProfile(userId);
         }
 
         throw new UserNotFoundException("No specific profile role found for user ID: " + userId);
@@ -62,6 +69,7 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
     @Override
     @Transactional
     public UserProfileResponse updateProfile(UUID userId, UserProfileRequest request) {
+        enforceRoleMatches(userId, request);
         if (!userProfileRepository.existsById(userId)) {
             throw new UserNotFoundException("Cannot update. Profile does not exist for user ID: " + userId);
         }
@@ -98,6 +106,8 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             ngoProfileService.deleteProfile(userId);
         } else if (governmentOfficialProfileService.existsById(userId)) {
             governmentOfficialProfileService.deleteProfile(userId);
+        } else if (rescueTeamProfileService.existsById(userId)) {
+            rescueTeamProfileService.deleteProfile(userId);
         } else {
             userProfileRepository.deleteById(userId);
         }
@@ -110,6 +120,7 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             case VolunteerProfileRequest req -> volunteerProfileService.createProfile(userId, req);
             case NGOProfileRequest req -> ngoProfileService.createProfile(userId, req);
             case GovernmentOfficialProfileRequest req -> governmentOfficialProfileService.createProfile(userId, req);
+            case RescueTeamProfileRequest req -> rescueTeamProfileService.createProfile(userId, req);
             default -> throw new BadRequestException("Unsupported profile type: " + request.getClass().getSimpleName());
         };
     }
@@ -121,7 +132,23 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             case VolunteerProfileRequest req -> volunteerProfileService.updateProfile(userId, req);
             case NGOProfileRequest req -> ngoProfileService.updateProfile(userId, req);
             case GovernmentOfficialProfileRequest req -> governmentOfficialProfileService.updateProfile(userId, req);
+            case RescueTeamProfileRequest req -> rescueTeamProfileService.updateProfile(userId, req);
             default -> throw new BadRequestException("Unsupported profile type: " + request.getClass().getSimpleName());
         };
+    }
+
+    private void enforceRoleMatches(UUID userId, UserProfileRequest request) {
+        Role role = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"))
+                .getRole();
+        boolean matches = switch (role) {
+            case CITIZEN -> request instanceof CitizenProfileRequest;
+            case VOLUNTEER -> request instanceof VolunteerProfileRequest;
+            case NGO -> request instanceof NGOProfileRequest;
+            case GOVERNMENT_OFFICIAL -> request instanceof GovernmentOfficialProfileRequest;
+            case RESCUE_TEAM -> request instanceof RescueTeamProfileRequest;
+            default -> false;
+        };
+        if (!matches) throw new BadRequestException("Profile type does not match the authenticated account role.");
     }
 }

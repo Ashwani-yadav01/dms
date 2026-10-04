@@ -30,4 +30,7 @@ public class RegisterRequest {
     @NotNull(message = "Role is required")
     private Role role;
 
+    // Required and validated server-side for privileged registrations.
+    private String authorizationCode;
+
 }

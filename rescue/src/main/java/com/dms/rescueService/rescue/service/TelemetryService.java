@@ -4,6 +4,7 @@ import com.dms.common.events.RescueMissionStatusUpdatedEvent;
 import com.dms.rescueService.rescue.entity.MissionStatus;
 import com.dms.rescueService.rescue.entity.RescueMission;
 import com.dms.rescueService.rescue.repository.RescueMissionRepository;
+import com.dms.rescueService.rescue.security.RescueAuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,7 @@ public class TelemetryService {
     private final RedisGeoService redisGeoService;
     private final RescueMissionRepository missionRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RescueAuthorizationService authorization;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String rescueStatusTopic;
@@ -32,6 +34,7 @@ public class TelemetryService {
     public void processTelemetryPing(UUID missionId, double latitude, double longitude) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new IllegalArgumentException("Mission not found: " + missionId));
+        authorization.requireAssignedTeam(mission);
 
         // 1. Update unit coordinates ONLY in Redis GEO (Does not touch PostgreSQL)
         redisGeoService.updateUnitLocation(missionId, latitude, longitude);
@@ -80,6 +83,9 @@ public class TelemetryService {
         RescueMissionStatusUpdatedEvent event = RescueMissionStatusUpdatedEvent.builder()
                 .incidentId(mission.getIncidentId())
                 .missionId(mission.getId())
+                .departmentId(mission.getDepartment().getId())
+                .assignedLeaderId(mission.getAssignedLeaderId())
+                .performedBy(authorization.currentUserIdOrNull())
                 .status(newStatus)
                 .notes(notes)
                 .build();

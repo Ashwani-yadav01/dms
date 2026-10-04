@@ -15,6 +15,8 @@ import java.util.UUID;
 @Repository
 public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
+    Optional<Hospital> findByName(String name);
+
     // 🚨 The critical lock for allocating beds during mass casualties
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT h FROM Hospital h WHERE h.id = :id")

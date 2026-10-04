@@ -1,6 +1,7 @@
 package com.dms.incident.service;
 
 import com.dms.incident.dto.request.IncidentRequest;
+import com.dms.incident.dto.request.AssignOfficialRequest;
 import com.dms.incident.dto.response.IncidentResponse;
 import com.dms.incident.entity.IncidentStatus;
 import com.dms.incident.entity.Severity;
@@ -41,9 +42,11 @@ public interface IncidentService {
 
     void deleteIncident(UUID id, UUID userId);
 
+    IncidentResponse assignOfficial(UUID incidentId, AssignOfficialRequest request);
+
     void processRescueMissionCompletion(UUID incidentId, UUID missionId, String resolutionNotes);
 
-    void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes);
+    void updateIncidentStatusFromRescue(UUID incidentId, String status, String notes, UUID departmentId, UUID performedBy);
 
     void notifyEndUser(UUID incidentId, String status, String notes);
 }

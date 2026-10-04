@@ -11,6 +11,7 @@ import com.dms.rescueService.rescue.repository.RescueMissionRepository;
 import com.dms.rescueService.rescue.repository.RescuePersonnelRepository;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueMissionService;
+import com.dms.rescueService.rescue.security.RescueAuthorizationService;
 import com.dms.rescueService.rescue.state.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     private final RescuePersonnelRepository personnelRepository;
     private final RedisGeoService redisGeoService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RescueAuthorizationService authorization;
 
     @Value("${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}")
     private String statusTopic;
@@ -43,6 +45,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     public void processLocationTelemetry(UUID missionId, double latitude, double longitude) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+        authorization.requireAssignedTeam(mission);
 
         if (mission.getStatus() == MissionStatus.COMPLETED || mission.getStatus() == MissionStatus.CANCELLED) {
             return;
@@ -70,6 +73,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     public RescueMissionResponse completeMission(UUID missionId, MissionActionRequest request) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+        authorization.requireAssignedTeam(mission);
 
         MissionState currentState = mapStatusToState(mission.getStatus());
         MissionState newState = currentState.complete(); // Throws IllegalStateException if NOT ON_SCENE
@@ -83,6 +87,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     public RescueMissionResponse cancelMission(UUID missionId, MissionActionRequest request) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+        authorization.requireAssignedTeam(mission);
 
         MissionState currentState = mapStatusToState(mission.getStatus());
         MissionState newState = currentState.cancel(); // Validated via State Pattern
@@ -97,6 +102,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     public RescueMissionResponse escalateMission(UUID missionId, MissionActionRequest request) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+        authorization.requireAssignedTeam(mission);
 
         MissionState currentState = mapStatusToState(mission.getStatus());
         MissionState newState = currentState.escalate(); // Validated via State Pattern
@@ -159,6 +165,8 @@ public class RescueMissionServiceImpl implements RescueMissionService {
                 .missionId(mission.getId())
                 .incidentId(mission.getIncidentId())
                 .departmentId(mission.getDepartment().getId())
+                .assignedLeaderId(mission.getAssignedLeaderId())
+                .performedBy(authorization.currentUserIdOrNull())
                 .status(mission.getStatus())
                 .notes(mission.getNotes())
                 .updatedAt(LocalDateTime.now())
@@ -172,15 +180,17 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     @Override
     @Transactional(readOnly = true)
     public RescueMissionResponse getMissionById(UUID missionId) {
-        return missionRepository.findById(missionId)
-                .map(this::mapToResponse)
+        RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
+        authorization.requireMissionView(mission);
+        return mapToResponse(mission);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<RescueMissionResponse> getMissionsByIncidentId(UUID incidentId) {
         return missionRepository.findByIncidentId(incidentId).stream()
+                .filter(mission -> { authorization.requireMissionView(mission); return true; })
                 .map(this::mapToResponse)
                 .toList();
     }
@@ -188,6 +198,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     @Override
     @Transactional(readOnly = true)
     public List<RescueMissionResponse> getMissionsByDepartmentId(UUID departmentId) {
+        authorization.requireDepartmentView(departmentId);
         return missionRepository.findByDepartmentId(departmentId).stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -196,6 +207,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     @Override
     @Transactional(readOnly = true)
     public List<RescueMissionResponse> getMissionsByStatus(MissionStatus status) {
+        authorization.requireDispatcher();
         return missionRepository.findByStatus(status).stream()
                 .map(this::mapToResponse)
                 .toList();

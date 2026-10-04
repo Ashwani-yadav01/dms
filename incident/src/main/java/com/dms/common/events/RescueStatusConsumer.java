@@ -26,7 +26,9 @@ public class RescueStatusConsumer {
         incidentService.updateIncidentStatusFromRescue(
                 event.getIncidentId(),
                 event.getStatus(),
-                event.getNotes()
+                event.getNotes(),
+                event.getDepartmentId(),
+                event.getPerformedBy()
         );
     }
 }

@@ -6,6 +6,7 @@ import com.dms.rescueService.rescue.entity.RescueMission;
 import com.dms.rescueService.rescue.service.RedisGeoService;
 import com.dms.rescueService.rescue.service.RescueAssignmentService;
 import com.dms.rescueService.rescue.service.RescueMissionService;
+import com.dms.rescueService.rescue.exception.RescueAuthorizationException;
 import jakarta.validation.Valid;
 import lombok.Builder;
 import lombok.Data;
@@ -56,6 +57,10 @@ public class RescueMissionController {
     public ResponseEntity<LiveMissionStatusResponse> getLiveMissionStatus(
             @PathVariable UUID id,
             @RequestParam UUID incidentId) {
+
+        RescueMissionResponse mission = missionService.getMissionById(id);
+        if (!incidentId.equals(mission.getIncidentId()))
+            throw new RescueAuthorizationException("You are not authorized to perform this action.");
 
         String cachedStatus = redisGeoService.getCachedMissionStatus(id);
         double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(id, incidentId);

@@ -16,6 +16,13 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        ErrorResponse response = new ErrorResponse(LocalDateTime.now(), HttpStatus.FORBIDDEN.value(),
+                "Forbidden", "You are not authorized to perform this action.");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
     // 1. Handle @Valid / @Validated DTO Bean Validation Errors (400 Bad Request)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ValidationErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {

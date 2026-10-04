@@ -17,6 +17,7 @@ import java.util.UUID;
 public interface GovernmentOfficialProfileRepository extends JpaRepository<GovernmentOfficialProfile, UUID> {
 
     Optional<GovernmentOfficialProfile> findByEmployeeId(String employeeId);
+    boolean existsByGovernmentProfileId(String governmentProfileId);
 
     boolean existsByEmployeeId(String employeeId);
 

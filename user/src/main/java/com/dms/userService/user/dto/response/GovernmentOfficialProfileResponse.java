@@ -14,6 +14,7 @@ import java.util.UUID;
 public class GovernmentOfficialProfileResponse extends UserProfileResponse {
 
     private UUID id;
+    private String governmentProfileId;
     private String departmentName;
     private UUID departmentId; // Reference to physical station in Rescue Service
     private DepartmentCategory departmentCategory;

@@ -5,6 +5,12 @@ import com.dms.userService.user.dto.request.RegisterRequest;
 import com.dms.userService.user.dto.response.AuthResponse;
 import com.dms.userService.user.dto.response.RegisterResponse;
 import com.dms.userService.user.entity.User;
+import com.dms.userService.user.entity.Role;
+import com.dms.userService.user.entity.GovernmentRegistryStatus;
+import com.dms.userService.user.exception.BadRequestException;
+import com.dms.userService.user.repository.GovernmentRegistryRepository;
+import com.dms.userService.user.repository.GovernmentOfficialProfileRepository;
+import com.dms.userService.user.repository.RescueTeamProfileRepository;
 import com.dms.userService.user.exception.UserAlreadyExistsException;
 import com.dms.userService.user.repository.UserRepository;
 import com.dms.userService.user.security.CustomUserDetails;
@@ -32,9 +38,23 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final StringRedisTemplate redisTemplate;
+    private final GovernmentRegistryRepository governmentRegistryRepository;
+    private final GovernmentOfficialProfileRepository governmentOfficialProfileRepository;
+    private final RescueTeamProfileRepository rescueTeamProfileRepository;
     @Override
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
+        if (request.getRole() == Role.GOVERNMENT_OFFICIAL) {
+            boolean authorized = request.getAuthorizationCode() != null
+                    && governmentRegistryRepository.findByAuthorizationCode(request.getAuthorizationCode().trim().toUpperCase())
+                    .filter(record -> record.getStatus() == GovernmentRegistryStatus.ACTIVE)
+                    .filter(record -> record.getOfficialEmail() == null || record.getOfficialEmail().equalsIgnoreCase(request.getEmail().trim()))
+                    .filter(record -> record.getOfficialPhone() == null || record.getOfficialPhone().equals(request.getMobileNumber().trim()))
+                    .isPresent();
+            if (!authorized) throw new BadRequestException("Government official authorization failed.");
+        } else if (request.getRole() == Role.DISTRICT_ADMIN || request.getRole() == Role.RESCUE_TEAM || request.getRole() == Role.SUPER_ADMIN) {
+            throw new BadRequestException("This profile must be provisioned by an administrator.");
+        }
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new UserAlreadyExistsException("Email already registered: " + request.getEmail());
         }
@@ -58,6 +78,8 @@ public class AuthServiceImpl implements AuthService {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", savedUser.getId());
         extraClaims.put("role", savedUser.getRole().name());
+        extraClaims.put("govVerified", false);
+        extraClaims.put("rescueVerified", false);
 
         String jwtToken = jwtService.generateToken(extraClaims, userDetails);
 
@@ -86,6 +108,17 @@ public class AuthServiceImpl implements AuthService {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", user.getId());
         extraClaims.put("role", user.getRole().name());
+        governmentOfficialProfileRepository.findById(user.getId()).ifPresent(profile -> {
+            extraClaims.put("govVerified", Boolean.TRUE.equals(profile.getIsVerified()));
+            extraClaims.put("officialStatus", profile.getStatus() == null ? null : profile.getStatus().name());
+            extraClaims.put("officialLatitude", profile.getDutyOfficeLatitude());
+            extraClaims.put("officialLongitude", profile.getDutyOfficeLongitude());
+            extraClaims.put("officialDutyRadiusKm", profile.getDutyRadiusKm());
+        });
+        rescueTeamProfileRepository.findById(user.getId()).ifPresent(profile -> {
+            extraClaims.put("rescueVerified", Boolean.TRUE.equals(profile.getIsVerified()));
+            extraClaims.put("rescueDepartmentId", profile.getDepartmentId() == null ? null : profile.getDepartmentId().toString());
+        });
 
         String jwtToken = jwtService.generateToken(extraClaims, userDetails);
 

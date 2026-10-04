@@ -2,6 +2,7 @@ package com.dms.incident.controller;
 
 import com.dms.incident.dto.request.IncidentRequest;
 import com.dms.incident.dto.request.IncidentRejectionRequest;
+import com.dms.incident.dto.request.AssignOfficialRequest;
 import com.dms.incident.dto.response.IncidentResponse;
 import com.dms.incident.dto.response.PhotoUploadResponse;
 import com.dms.incident.entity.IncidentStatus;
@@ -108,16 +109,19 @@ public class IncidentController {
 
     // --- Incident Status & Management ---
 
+    @PatchMapping("/{id}/assign-official")
+    public ResponseEntity<IncidentResponse> assignOfficial(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignOfficialRequest request) {
+        return ResponseEntity.ok(incidentService.assignOfficial(id, request));
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<IncidentResponse> updateStatus(
             @PathVariable UUID id,
             @RequestParam IncidentStatus status,
-            @RequestParam(value = "photo", required = false) MultipartFile photo,
-            @RequestHeader("X-User-Role") String roleHeader
+            @RequestParam(value = "photo", required = false) MultipartFile photo
     ) {
-        if (!isGovernmentOfficial(roleHeader)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
         IncidentResponse response = incidentService.updateIncidentStatus(id, status, photo);
         return ResponseEntity.ok(response);
     }
@@ -125,12 +129,8 @@ public class IncidentController {
     @PostMapping("/{id}/reject")
     public ResponseEntity<IncidentResponse> rejectIncident(
             @PathVariable UUID id,
-            @Valid @RequestBody IncidentRejectionRequest request,
-            @RequestHeader("X-User-Role") String roleHeader
+            @Valid @RequestBody IncidentRejectionRequest request
     ) {
-        if (!isGovernmentOfficial(roleHeader)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
         return ResponseEntity.ok(incidentService.rejectIncident(id, request.getReason()));
     }
 
@@ -138,17 +138,9 @@ public class IncidentController {
     public ResponseEntity<IncidentResponse> resolveIncident(
             @PathVariable UUID id,
             @RequestPart("photo") MultipartFile photo,
-            @RequestParam("reason") String reason,
-            @RequestHeader("X-User-Role") String roleHeader
+            @RequestParam("reason") String reason
     ) {
-        if (!isGovernmentOfficial(roleHeader)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
         return ResponseEntity.ok(incidentService.resolveIncident(id, photo, reason));
-    }
-
-    private boolean isGovernmentOfficial(String role) {
-        return "GOVERNMENT_OFFICIAL".equalsIgnoreCase(role);
     }
 
     @PutMapping("/{id}")

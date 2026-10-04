@@ -2,8 +2,8 @@ package com.dms.userService.user.dto.request;
 
 import com.dms.userService.user.entity.DepartmentCategory;
 import com.dms.userService.user.entity.HierarchyLevel;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -33,11 +33,12 @@ public class GovernmentOfficialProfileRequest extends UserProfileRequest {
     @NotNull(message = "Hierarchy level is required")
     private HierarchyLevel hierarchyLevel;
 
-    private Double dutyRadiusKm = 25.0;
-
     private String jurisdictionCode;
 
     private UUID reportsToUserId; // Optional supervisor
+
+    @NotBlank(message = "Authorization code is required")
+    private String authorizationCode;
 
     // --- NORMALIZE INPUT STRING TO PREVENT INCONSISTENCY ---
     public void setDepartmentName(String departmentName) {
@@ -49,5 +50,13 @@ public class GovernmentOfficialProfileRequest extends UserProfileRequest {
         } else {
             this.departmentName = null;
         }
+    }
+
+    public void setEmployeeId(String employeeId) {
+        this.employeeId = employeeId == null ? null : employeeId.trim().toUpperCase();
+    }
+
+    public void setAuthorizationCode(String authorizationCode) {
+        this.authorizationCode = authorizationCode == null ? null : authorizationCode.trim().toUpperCase();
     }
 }

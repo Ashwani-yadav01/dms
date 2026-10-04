@@ -17,6 +17,8 @@ public class RescueMissionStatusUpdatedEvent implements Serializable {
     private UUID missionId;
     private UUID incidentId;
     private UUID departmentId;
+    private UUID assignedLeaderId;
+    private UUID performedBy;
     private String status;
     private String notes;
     private LocalDateTime updatedAt;

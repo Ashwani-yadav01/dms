@@ -9,6 +9,13 @@ import java.time.LocalDateTime;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(IncidentAuthorizationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(IncidentAuthorizationException ex) {
+        ErrorResponse response = new ErrorResponse(LocalDateTime.now(), HttpStatus.FORBIDDEN.value(),
+                "Forbidden", "You are not authorized to perform this action.");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
     @ExceptionHandler(IncidentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleIncidentNotFoundException(IncidentNotFoundException ex) {
         ErrorResponse response = new ErrorResponse(

@@ -67,6 +67,12 @@ public class Incident {
     @Column(nullable = false, updatable = false)
     private UUID reportedBy;
 
+    @Column(name = "assigned_department_id")
+    private UUID assignedDepartmentId;
+
+    @Column(name = "assigned_official_id")
+    private UUID assignedOfficialId;
+
     // Added: Points to the primary incident if this incident is marked as DUPLICATE
     @Column(name = "parent_incident_id")
     private UUID parentIncidentId;

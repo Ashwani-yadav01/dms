@@ -5,6 +5,7 @@ import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Email;
 import lombok.Data;
 
 import java.util.Set;
@@ -14,6 +15,14 @@ public class HospitalCreateRequest {
 
     @NotBlank(message = "Hospital name is required")
     private String name;
+
+    @NotBlank(message = "Hospital contact email is required")
+    @Email
+    private String email;
+
+    private String phoneNumber;
+
+    private String address;
 
     @NotNull(message = "Facility type is required")
     private FacilityType type;

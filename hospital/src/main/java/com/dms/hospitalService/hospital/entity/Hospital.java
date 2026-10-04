@@ -25,6 +25,11 @@ public class Hospital {
     private String name;
     @Column(nullable = false)
     private String email;
+
+    private String phoneNumber;
+
+    @Column(length = 500)
+    private String address;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private FacilityType type;

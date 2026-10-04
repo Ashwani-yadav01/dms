@@ -28,6 +28,9 @@ public class HospitalServiceImpl implements HospitalService {
     public HospitalResponse createHospital(HospitalCreateRequest request) {
         Hospital hospital = Hospital.builder()
                 .name(request.getName())
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .address(request.getAddress())
                 .type(request.getType())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
@@ -85,7 +88,7 @@ public class HospitalServiceImpl implements HospitalService {
                 .filter(h -> requiredSpecialities == null || requiredSpecialities.isEmpty() || h.getSpecialities().containsAll(requiredSpecialities))
                 // Re-sort based on the distance order returned by Redis
                 .sorted(Comparator.comparingInt(h -> nearestIds.indexOf(h.getId())))
-                .map(this::mapToResponse)
+                .map(h -> mapToResponse(h, distanceKm(latitude, longitude, h.getLatitude(), h.getLongitude())))
                 .collect(Collectors.toList());
     }
 
@@ -105,9 +108,17 @@ public class HospitalServiceImpl implements HospitalService {
     }
 
     private HospitalResponse mapToResponse(Hospital h) {
+        return mapToResponse(h, null);
+    }
+
+    private HospitalResponse mapToResponse(Hospital h, Double distanceKm) {
         return HospitalResponse.builder()
                 .id(h.getId())
                 .name(h.getName())
+                .email(h.getEmail())
+                .phoneNumber(h.getPhoneNumber())
+                .address(h.getAddress())
+                .distanceKm(distanceKm)
                 .type(h.getType())
                 .latitude(h.getLatitude())
                 .longitude(h.getLongitude())
@@ -118,5 +129,15 @@ public class HospitalServiceImpl implements HospitalService {
                 .isAcceptingPatients(h.getIsAcceptingPatients())
                 .updatedAt(h.getUpdatedAt())
                 .build();
+    }
+
+    private double distanceKm(double lat1, double lon1, double lat2, double lon2) {
+        double earthRadiusKm = 6371.0088;
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 }

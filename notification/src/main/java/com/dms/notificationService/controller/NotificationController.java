@@ -18,12 +18,7 @@ public class NotificationController {
     private final NotificationDispatchService dispatchService;
 
     @GetMapping("/logs")
-    public ResponseEntity<List<NotificationLog>> getAllLogs() {
-        return ResponseEntity.ok(logRepository.findAll());
-    }
-
-    @GetMapping("/logs/recipient")
-    public ResponseEntity<List<NotificationLog>> getLogsByEmail(@RequestParam String email) {
+    public ResponseEntity<List<NotificationLog>> getMyLogs(@RequestHeader("X-User-Email") String email) {
         return ResponseEntity.ok(logRepository.findByRecipientEmail(email));
     }
 

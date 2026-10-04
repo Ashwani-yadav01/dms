@@ -7,10 +7,12 @@ import com.dms.userService.user.exception.UserNotFoundException;
 import com.dms.userService.user.repository.UserProfileRepository;
 import com.dms.userService.user.repository.UserRepository;
 import com.dms.userService.user.service.UserService;
+import com.dms.userService.user.service.UserLocationRedisGeoService;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 @Service
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class UserServiceImpl implements UserService {
     private final ModelMapper mapper;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final UserLocationRedisGeoService userLocationGeoService;
 //    @Override
 //    public RegisterResponse createUser( RegisterRequest request) {
 //        if (userRepository.existsByEmail(request.getEmail())) {
@@ -63,8 +66,17 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<String> findEmailsWithinRadius(Double lat, Double lon, Double radiusKm) {
+        List<UUID> nearbyUserIds = userLocationGeoService.findUserIdsWithinRadius(lat, lon, radiusKm);
+        if (nearbyUserIds.isEmpty()) return List.of();
 
-        return userRepository.findEmailsWithinRadius(lat, lon, radiusKm);
+        // Keep each PostgreSQL IN query bounded while avoiding a request per recipient.
+        List<String> emails = new ArrayList<>();
+        final int batchSize = 500;
+        for (int start = 0; start < nearbyUserIds.size(); start += batchSize) {
+            int end = Math.min(start + batchSize, nearbyUserIds.size());
+            emails.addAll(userRepository.findEmailsByIdIn(nearbyUserIds.subList(start, end)));
+        }
+        return emails;
     }
 
 //    @Override
@@ -78,6 +90,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void deleteUser(UUID userId) {
         userRepository.deleteById(userId);
+        userLocationGeoService.removeUserLocation(userId);
         return ;
     }
 }

@@ -53,13 +53,16 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     Claims claims = jwtUtil.validateAndExtractClaims(token);
                     String userId = claims.get("userId", String.class);
                     String role = claims.get("role", String.class);
+                    String email = claims.getSubject();
 
                     ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                             .headers(headers -> {
                                 headers.remove("X-User-Id");
                                 headers.remove("X-User-Role");
+                                headers.remove("X-User-Email");
                                 headers.set("X-User-Id", userId);
                                 headers.set("X-User-Role", role);
+                                headers.set("X-User-Email", email);
                             })
                             .build();
 

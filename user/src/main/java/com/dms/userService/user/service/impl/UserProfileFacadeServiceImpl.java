@@ -29,6 +29,7 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
     private final NGOProfileService ngoProfileService;
     private final GovernmentOfficialProfileService governmentOfficialProfileService;
     private final RescueTeamProfileService rescueTeamProfileService;
+    private final UserLocationRedisGeoService userLocationGeoService;
 
     @Override
     @Transactional
@@ -39,7 +40,9 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             throw new UserAlreadyExistsException("Profile already exists for user ID: " + userId);
         }
 
-        return delegateToRoleServiceCreate(userId, request);
+        UserProfileResponse profile = delegateToRoleServiceCreate(userId, request);
+        indexProfileLocation(userId, profile);
+        return profile;
     }
 
     @Override
@@ -75,7 +78,9 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
         }
 
         // Handles profile updates (and role transitions if the request subtype changed)
-        return delegateToRoleServiceUpdate(userId, request);
+        UserProfileResponse profile = delegateToRoleServiceUpdate(userId, request);
+        indexProfileLocation(userId, profile);
+        return profile;
     }
 
     @Override
@@ -110,6 +115,15 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
             rescueTeamProfileService.deleteProfile(userId);
         } else {
             userProfileRepository.deleteById(userId);
+        }
+        userLocationGeoService.removeUserLocation(userId);
+    }
+
+    private void indexProfileLocation(UUID userId, UserProfileResponse profile) {
+        if (profile.getLatitude() != null && profile.getLongitude() != null) {
+            userLocationGeoService.registerOrUpdateUserLocation(userId, profile.getLatitude(), profile.getLongitude());
+        } else {
+            userLocationGeoService.removeUserLocation(userId);
         }
     }
 

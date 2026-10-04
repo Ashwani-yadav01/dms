@@ -14,6 +14,10 @@ import java.util.UUID;
 public class HospitalResponse {
     private UUID id;
     private String name;
+    private String email;
+    private String phoneNumber;
+    private String address;
+    private Double distanceKm;
     private FacilityType type;
     private Double latitude;
     private Double longitude;

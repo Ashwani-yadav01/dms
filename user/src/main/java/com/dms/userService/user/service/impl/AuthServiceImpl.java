@@ -7,9 +7,11 @@ import com.dms.userService.user.dto.response.RegisterResponse;
 import com.dms.userService.user.entity.User;
 import com.dms.userService.user.entity.Role;
 import com.dms.userService.user.entity.GovernmentRegistryStatus;
+import com.dms.userService.user.entity.HospitalRegistryStatus;
 import com.dms.userService.user.exception.BadRequestException;
 import com.dms.userService.user.repository.GovernmentRegistryRepository;
 import com.dms.userService.user.repository.GovernmentOfficialProfileRepository;
+import com.dms.userService.user.repository.HospitalRegistryRepository;
 import com.dms.userService.user.repository.RescueTeamProfileRepository;
 import com.dms.userService.user.exception.UserAlreadyExistsException;
 import com.dms.userService.user.repository.UserRepository;
@@ -40,6 +42,7 @@ public class AuthServiceImpl implements AuthService {
     private final StringRedisTemplate redisTemplate;
     private final GovernmentRegistryRepository governmentRegistryRepository;
     private final GovernmentOfficialProfileRepository governmentOfficialProfileRepository;
+    private final HospitalRegistryRepository hospitalRegistryRepository;
     private final RescueTeamProfileRepository rescueTeamProfileRepository;
     @Override
     @Transactional
@@ -52,6 +55,14 @@ public class AuthServiceImpl implements AuthService {
                     .filter(record -> record.getOfficialPhone() == null || record.getOfficialPhone().equals(request.getMobileNumber().trim()))
                     .isPresent();
             if (!authorized) throw new BadRequestException("Government official authorization failed.");
+        } else if (request.getRole() == Role.HOSPITAL) {
+            boolean authorized = request.getAuthorizationCode() != null
+                    && hospitalRegistryRepository.findByAuthorizationCode(request.getAuthorizationCode().trim().toUpperCase())
+                    .filter(record -> record.getStatus() == HospitalRegistryStatus.ACTIVE)
+                    .filter(record -> record.getHospitalEmail() == null || record.getHospitalEmail().equalsIgnoreCase(request.getEmail().trim()))
+                    .filter(record -> record.getHospitalPhone() == null || record.getHospitalPhone().equals(request.getMobileNumber().trim()))
+                    .isPresent();
+            if (!authorized) throw new BadRequestException("Hospital authorization failed. A valid hospital invitation code is required.");
         } else if (request.getRole() == Role.DISTRICT_ADMIN || request.getRole() == Role.RESCUE_TEAM || request.getRole() == Role.SUPER_ADMIN) {
             throw new BadRequestException("This profile must be provisioned by an administrator.");
         }
@@ -73,13 +84,23 @@ public class AuthServiceImpl implements AuthService {
 
         User savedUser = userRepository.save(user);
 
-        // 2. Generate JWT Token immediately upon registration
+        // 3. Consume the hospital invitation so the code cannot be reused
+        if (request.getRole() == Role.HOSPITAL && request.getAuthorizationCode() != null) {
+            hospitalRegistryRepository.findByAuthorizationCode(request.getAuthorizationCode().trim().toUpperCase())
+                    .ifPresent(registry -> {
+                        registry.setStatus(HospitalRegistryStatus.CONSUMED);
+                        hospitalRegistryRepository.save(registry);
+                    });
+        }
+
+        // 4. Generate JWT Token immediately upon registration
         CustomUserDetails userDetails = new CustomUserDetails(savedUser);
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", savedUser.getId());
         extraClaims.put("role", savedUser.getRole().name());
         extraClaims.put("govVerified", false);
         extraClaims.put("rescueVerified", false);
+        extraClaims.put("hospitalVerified", false);
 
         String jwtToken = jwtService.generateToken(extraClaims, userDetails);
 

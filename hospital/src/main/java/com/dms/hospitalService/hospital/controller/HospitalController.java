@@ -1,11 +1,18 @@
 package com.dms.hospitalService.hospital.controller;
 
 import com.dms.hospitalService.hospital.dto.request.HospitalCreateRequest;
+import com.dms.hospitalService.hospital.dto.request.HospitalUpdateRequest;
 import com.dms.hospitalService.hospital.dto.response.HospitalResponse;
+import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
 import com.dms.hospitalService.hospital.service.HospitalService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -55,5 +62,88 @@ public class HospitalController {
     public ResponseEntity<Void> deleteHospital(@PathVariable UUID id) {
         hospitalService.deleteHospital(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ========== ADMIN ENDPOINTS ==========
+    // These require GOVERNMENT_OFFICIAL or DISTRICT_ADMIN role (validated via X-User-Role header)
+
+    @GetMapping("/admin")
+    public ResponseEntity<Page<HospitalResponse>> listHospitals(
+            HttpServletRequest request,
+            @RequestParam(required = false) HospitalStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        Sort sort = sortDir.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return ResponseEntity.ok(hospitalService.listHospitals(pageable, status));
+    }
+
+    @GetMapping("/admin/{id}")
+    public ResponseEntity<HospitalResponse> getHospitalAdmin(
+            HttpServletRequest request,
+            @PathVariable UUID id) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(hospitalService.getHospitalById(id));
+    }
+
+    @PostMapping("/admin")
+    public ResponseEntity<HospitalResponse> createHospitalAdmin(
+            HttpServletRequest request,
+            @Valid @RequestBody HospitalCreateRequest hospitalRequest) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return new ResponseEntity<>(hospitalService.createHospitalAdmin(hospitalRequest), HttpStatus.CREATED);
+    }
+
+    @PatchMapping("/admin/{id}")
+    public ResponseEntity<HospitalResponse> updateHospital(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @Valid @RequestBody HospitalUpdateRequest updateRequest) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(hospitalService.updateHospital(id, updateRequest));
+    }
+
+    @PatchMapping("/admin/{id}/status")
+    public ResponseEntity<HospitalResponse> changeHospitalStatus(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @RequestParam HospitalStatus status) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(hospitalService.changeHospitalStatus(id, status));
+    }
+
+    private boolean isAdminRole(String role) {
+        return "GOVERNMENT_OFFICIAL".equals(role) || "DISTRICT_ADMIN".equals(role);
     }
 }

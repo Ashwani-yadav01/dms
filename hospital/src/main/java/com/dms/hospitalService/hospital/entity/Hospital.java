@@ -72,6 +72,10 @@ public class Hospital {
     @Column(nullable = false)
     private Boolean isAcceptingPatients = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private HospitalStatus status = HospitalStatus.ACTIVE;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

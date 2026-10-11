@@ -1,7 +1,10 @@
 package com.dms.hospitalService.hospital.repository;
 
 import com.dms.hospitalService.hospital.entity.Hospital;
+import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -27,4 +30,10 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
     // Fetch hospitals by a list of IDs (used after we get nearest IDs from Redis GEO)
     List<Hospital> findByIdInAndIsAcceptingPatientsTrue(List<UUID> ids);
+
+    // Admin queries
+    Page<Hospital> findAll(Pageable pageable);
+    Page<Hospital> findByStatus(HospitalStatus status, Pageable pageable);
+    List<Hospital> findByStatusAndIsAcceptingPatientsTrue(HospitalStatus status);
+    Optional<Hospital> findByEmail(String email);
 }

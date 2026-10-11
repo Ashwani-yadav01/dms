@@ -1,14 +1,18 @@
 package com.dms.hospitalService.hospital.service.impl;
 
 import com.dms.hospitalService.hospital.dto.request.HospitalCreateRequest;
+import com.dms.hospitalService.hospital.dto.request.HospitalUpdateRequest;
 import com.dms.hospitalService.hospital.dto.response.HospitalResponse;
 import com.dms.hospitalService.hospital.entity.Hospital;
+import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
 import com.dms.hospitalService.hospital.repository.HospitalRepository;
 import com.dms.hospitalService.hospital.service.HospitalRedisGeoService;
 import com.dms.hospitalService.hospital.service.HospitalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,6 +131,7 @@ public class HospitalServiceImpl implements HospitalService {
                 .availableIcuBeds(h.getAvailableIcuBeds())
                 .specialities(h.getSpecialities())
                 .isAcceptingPatients(h.getIsAcceptingPatients())
+                .status(h.getStatus())
                 .updatedAt(h.getUpdatedAt())
                 .build();
     }
@@ -139,5 +144,125 @@ public class HospitalServiceImpl implements HospitalService {
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<HospitalResponse> listHospitals(Pageable pageable, HospitalStatus status) {
+        Page<Hospital> page = (status != null)
+                ? hospitalRepository.findByStatus(status, pageable)
+                : hospitalRepository.findAll(pageable);
+        return page.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse createHospitalAdmin(HospitalCreateRequest request) {
+        // Check for duplicate by email
+        if (hospitalRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Hospital with this email already exists: " + request.getEmail());
+        }
+        // Check for duplicate by name
+        if (hospitalRepository.findByName(request.getName()).isPresent()) {
+            throw new IllegalArgumentException("Hospital with this name already exists: " + request.getName());
+        }
+
+        Hospital hospital = Hospital.builder()
+                .name(request.getName())
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .address(request.getAddress())
+                .type(request.getType())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .elevationMeters(request.getElevationMeters())
+                .totalGeneralBeds(request.getTotalGeneralBeds())
+                .availableGeneralBeds(request.getTotalGeneralBeds())
+                .totalIcuBeds(request.getTotalIcuBeds())
+                .availableIcuBeds(request.getTotalIcuBeds())
+                .specialities(request.getSpecialities() != null ? request.getSpecialities() : new HashSet<>())
+                .isAcceptingPatients(true)
+                .status(HospitalStatus.ACTIVE)
+                .build();
+
+        hospital = hospitalRepository.save(hospital);
+
+        // Sync with Redis GEO immediately
+        geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+
+        log.info("Admin created new hospital: {}", hospital.getName());
+        return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse updateHospital(UUID id, HospitalUpdateRequest request) {
+        Hospital hospital = hospitalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + id));
+
+        // Check for duplicate email if changing
+        if (request.getEmail() != null && !request.getEmail().equals(hospital.getEmail())) {
+            if (hospitalRepository.findByEmail(request.getEmail()).isPresent()) {
+                throw new IllegalArgumentException("Hospital with this email already exists: " + request.getEmail());
+            }
+            hospital.setEmail(request.getEmail());
+        }
+
+        // Check for duplicate name if changing
+        if (request.getName() != null && !request.getName().equals(hospital.getName())) {
+            if (hospitalRepository.findByName(request.getName()).isPresent()) {
+                throw new IllegalArgumentException("Hospital with this name already exists: " + request.getName());
+            }
+            hospital.setName(request.getName());
+        }
+
+        if (request.getPhoneNumber() != null) hospital.setPhoneNumber(request.getPhoneNumber());
+        if (request.getAddress() != null) hospital.setAddress(request.getAddress());
+        if (request.getType() != null) hospital.setType(request.getType());
+        if (request.getLatitude() != null) hospital.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) hospital.setLongitude(request.getLongitude());
+        if (request.getElevationMeters() != null) hospital.setElevationMeters(request.getElevationMeters());
+        if (request.getTotalGeneralBeds() != null) hospital.setTotalGeneralBeds(request.getTotalGeneralBeds());
+        if (request.getTotalIcuBeds() != null) hospital.setTotalIcuBeds(request.getTotalIcuBeds());
+        if (request.getSpecialities() != null) hospital.setSpecialities(request.getSpecialities());
+        if (request.getIsAcceptingPatients() != null) hospital.setIsAcceptingPatients(request.getIsAcceptingPatients());
+
+        // If coordinates changed, update Redis GEO
+        if (request.getLatitude() != null || request.getLongitude() != null) {
+            geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        }
+
+        hospital = hospitalRepository.save(hospital);
+        log.info("Admin updated hospital: {}", hospital.getName());
+        return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse changeHospitalStatus(UUID id, HospitalStatus newStatus) {
+        Hospital hospital = hospitalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + id));
+
+        HospitalStatus oldStatus = hospital.getStatus();
+        if (oldStatus == newStatus) {
+            log.info("Hospital {} already has status {}", id, newStatus);
+            return mapToResponse(hospital);
+        }
+
+        hospital.setStatus(newStatus);
+        hospital = hospitalRepository.save(hospital);
+
+        // Sync Redis GEO based on new status
+        if (newStatus == HospitalStatus.ACTIVE) {
+            // Re-register in geo index for routing
+            geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+            log.info("Hospital {} reactivated and added to geo index", id);
+        } else {
+            // Remove from geo index for SUSPENDED/DEACTIVATED
+            geoService.removeHospitalLocation(id);
+            log.info("Hospital {} status changed to {} and removed from geo index", id, newStatus);
+        }
+
+        return mapToResponse(hospital);
     }
 }

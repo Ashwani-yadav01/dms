@@ -1,6 +1,7 @@
 package com.dms.hospitalService.hospital.dto.response;
 
 import com.dms.hospitalService.hospital.entity.FacilityType;
+import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
 import lombok.Builder;
 import lombok.Data;
@@ -26,5 +27,6 @@ public class HospitalResponse {
     private Integer availableIcuBeds;
     private Set<MedicalSpeciality> specialities;
     private Boolean isAcceptingPatients;
+    private HospitalStatus status;
     private LocalDateTime updatedAt;
 }

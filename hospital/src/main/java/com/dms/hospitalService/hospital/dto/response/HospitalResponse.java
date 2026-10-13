@@ -28,5 +28,12 @@ public class HospitalResponse {
     private Set<MedicalSpeciality> specialities;
     private Boolean isAcceptingPatients;
     private HospitalStatus status;
+    private String statusReason;
+    private UUID adminUserId;
+    private UUID verifiedBy;
+    private LocalDateTime verifiedAt;
+    private LocalDateTime locationLastUpdatedAt;
+    private LocalDateTime bedLastUpdatedAt;
+    private LocalDateTime emergencyStatusLastUpdatedAt;
     private LocalDateTime updatedAt;
 }

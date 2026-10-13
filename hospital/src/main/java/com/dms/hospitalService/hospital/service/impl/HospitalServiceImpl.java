@@ -1,11 +1,14 @@
 package com.dms.hospitalService.hospital.service.impl;
 
+import com.dms.hospitalService.hospital.dto.request.HospitalBedUpdateRequest;
 import com.dms.hospitalService.hospital.dto.request.HospitalCreateRequest;
 import com.dms.hospitalService.hospital.dto.request.HospitalUpdateRequest;
 import com.dms.hospitalService.hospital.dto.response.HospitalResponse;
 import com.dms.hospitalService.hospital.entity.Hospital;
+import com.dms.hospitalService.hospital.entity.HospitalAudit;
 import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
+import com.dms.hospitalService.hospital.repository.HospitalAuditRepository;
 import com.dms.hospitalService.hospital.repository.HospitalRepository;
 import com.dms.hospitalService.hospital.service.HospitalRedisGeoService;
 import com.dms.hospitalService.hospital.service.HospitalService;
@@ -16,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,10 +30,30 @@ public class HospitalServiceImpl implements HospitalService {
 
     private final HospitalRepository hospitalRepository;
     private final HospitalRedisGeoService geoService;
+    private final HospitalAuditRepository auditRepository;
+
+    private void recordAudit(UUID hospitalId, UUID performedBy, String actorRole, String action, String details, String prevValue, String newValue) {
+        try {
+            HospitalAudit audit = HospitalAudit.builder()
+                    .hospitalId(hospitalId)
+                    .performedBy(performedBy)
+                    .actorRole(actorRole != null ? actorRole : "SYSTEM")
+                    .action(action)
+                    .details(details)
+                    .previousValue(prevValue)
+                    .newValue(newValue)
+                    .occurredAt(LocalDateTime.now())
+                    .build();
+            auditRepository.save(audit);
+        } catch (Exception e) {
+            log.warn("Failed to persist hospital audit log: {}", e.getMessage());
+        }
+    }
 
     @Override
     @Transactional
     public HospitalResponse createHospital(HospitalCreateRequest request) {
+        HospitalStatus initialStatus = request.getStatus() != null ? request.getStatus() : HospitalStatus.PENDING_VERIFICATION;
         Hospital hospital = Hospital.builder()
                 .name(request.getName())
                 .email(request.getEmail())
@@ -45,14 +69,22 @@ public class HospitalServiceImpl implements HospitalService {
                 .availableIcuBeds(request.getTotalIcuBeds())
                 .specialities(request.getSpecialities() != null ? request.getSpecialities() : new HashSet<>())
                 .isAcceptingPatients(true)
+                .status(initialStatus)
+                .adminUserId(request.getAdminUserId())
+                .locationLastUpdatedAt(LocalDateTime.now())
+                .bedLastUpdatedAt(LocalDateTime.now())
+                .emergencyStatusLastUpdatedAt(LocalDateTime.now())
                 .build();
 
         hospital = hospitalRepository.save(hospital);
 
-        // Sync with Redis GEO immediately
-        geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        // Only register in Redis GEO if ACTIVE (not when PENDING_VERIFICATION or REJECTED)
+        if (initialStatus == HospitalStatus.ACTIVE) {
+            geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        }
 
-        log.info("Created new hospital: {}", hospital.getName());
+        recordAudit(hospital.getId(), request.getAdminUserId(), "HOSPITAL", "CREATE", "Hospital registered", null, initialStatus.name());
+        log.info("Created new hospital: {} with initial status: {}", hospital.getName(), initialStatus);
         return mapToResponse(hospital);
     }
 
@@ -68,8 +100,14 @@ public class HospitalServiceImpl implements HospitalService {
     public HospitalResponse toggleAcceptingPatients(UUID id, Boolean status) {
         Hospital hospital = hospitalRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Hospital not found"));
+        Boolean oldStatus = hospital.getIsAcceptingPatients();
         hospital.setIsAcceptingPatients(status);
-        return mapToResponse(hospitalRepository.save(hospital));
+        hospital.setEmergencyStatusLastUpdatedAt(LocalDateTime.now());
+        hospital = hospitalRepository.save(hospital);
+        recordAudit(hospital.getId(), null, "STAFF", "INTAKE_TOGGLE",
+                "Emergency intake accepting status toggled to " + status,
+                String.valueOf(oldStatus), String.valueOf(status));
+        return mapToResponse(hospital);
     }
 
     @Override
@@ -80,18 +118,31 @@ public class HospitalServiceImpl implements HospitalService {
 
         // 1. Get ordered list of nearest hospital IDs from Redis
         List<UUID> nearestIds = geoService.findHospitalsWithinRadius(latitude, longitude, radiusKm);
-        if (nearestIds.isEmpty()) return Collections.emptyList();
+        List<Hospital> hospitals;
 
-        // 2. Fetch from DB
-        List<Hospital> hospitals = hospitalRepository.findByIdInAndIsAcceptingPatientsTrue(nearestIds);
+        if (nearestIds.isEmpty()) {
+            // Self-healing fallback: query PostgreSQL active hospitals within radius and backfill Redis GEO
+            List<Hospital> activeHospitals = hospitalRepository.findByStatusAndIsAcceptingPatientsTrue(HospitalStatus.ACTIVE);
+            hospitals = activeHospitals.stream()
+                    .filter(h -> distanceKm(latitude, longitude, h.getLatitude(), h.getLongitude()) <= radiusKm)
+                    .peek(h -> {
+                        try {
+                            geoService.registerHospitalLocation(h.getId(), h.getLatitude(), h.getLongitude());
+                        } catch (Exception ignored) {}
+                    })
+                    .sorted(Comparator.comparingDouble(h -> distanceKm(latitude, longitude, h.getLatitude(), h.getLongitude())))
+                    .collect(Collectors.toList());
+        } else {
+            // 2. Fetch from DB using Redis result order
+            hospitals = hospitalRepository.findByIdInAndIsAcceptingPatientsTrue(nearestIds);
+        }
 
-        // 3. Filter by capabilities & capacity, then sort back to Redis distance order
+        // 3. Filter by capabilities & capacity, then sort back to distance order
         return hospitals.stream()
                 .filter(h -> !requiresIcu || h.getAvailableIcuBeds() > 0)
                 .filter(h -> (!requiresIcu && h.getAvailableGeneralBeds() > 0) || requiresIcu)
                 .filter(h -> requiredSpecialities == null || requiredSpecialities.isEmpty() || h.getSpecialities().containsAll(requiredSpecialities))
-                // Re-sort based on the distance order returned by Redis
-                .sorted(Comparator.comparingInt(h -> nearestIds.indexOf(h.getId())))
+                .sorted(Comparator.comparingDouble(h -> distanceKm(latitude, longitude, h.getLatitude(), h.getLongitude())))
                 .map(h -> mapToResponse(h, distanceKm(latitude, longitude, h.getLatitude(), h.getLongitude())))
                 .collect(Collectors.toList());
     }
@@ -132,6 +183,13 @@ public class HospitalServiceImpl implements HospitalService {
                 .specialities(h.getSpecialities())
                 .isAcceptingPatients(h.getIsAcceptingPatients())
                 .status(h.getStatus())
+                .statusReason(h.getStatusReason())
+                .adminUserId(h.getAdminUserId())
+                .verifiedBy(h.getVerifiedBy())
+                .verifiedAt(h.getVerifiedAt())
+                .locationLastUpdatedAt(h.getLocationLastUpdatedAt())
+                .bedLastUpdatedAt(h.getBedLastUpdatedAt())
+                .emergencyStatusLastUpdatedAt(h.getEmergencyStatusLastUpdatedAt())
                 .updatedAt(h.getUpdatedAt())
                 .build();
     }
@@ -167,6 +225,7 @@ public class HospitalServiceImpl implements HospitalService {
             throw new IllegalArgumentException("Hospital with this name already exists: " + request.getName());
         }
 
+        HospitalStatus initialStatus = request.getStatus() != null ? request.getStatus() : HospitalStatus.ACTIVE;
         Hospital hospital = Hospital.builder()
                 .name(request.getName())
                 .email(request.getEmail())
@@ -182,15 +241,21 @@ public class HospitalServiceImpl implements HospitalService {
                 .availableIcuBeds(request.getTotalIcuBeds())
                 .specialities(request.getSpecialities() != null ? request.getSpecialities() : new HashSet<>())
                 .isAcceptingPatients(true)
-                .status(HospitalStatus.ACTIVE)
+                .status(initialStatus)
+                .adminUserId(request.getAdminUserId())
+                .locationLastUpdatedAt(LocalDateTime.now())
+                .bedLastUpdatedAt(LocalDateTime.now())
+                .emergencyStatusLastUpdatedAt(LocalDateTime.now())
                 .build();
 
         hospital = hospitalRepository.save(hospital);
 
-        // Sync with Redis GEO immediately
-        geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        if (initialStatus == HospitalStatus.ACTIVE) {
+            geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        }
 
-        log.info("Admin created new hospital: {}", hospital.getName());
+        recordAudit(hospital.getId(), request.getAdminUserId(), "ADMIN", "CREATE_ADMIN", "Hospital created by administrator", null, initialStatus.name());
+        log.info("Admin created new hospital: {} with status: {}", hospital.getName(), initialStatus);
         return mapToResponse(hospital);
     }
 
@@ -219,20 +284,38 @@ public class HospitalServiceImpl implements HospitalService {
         if (request.getPhoneNumber() != null) hospital.setPhoneNumber(request.getPhoneNumber());
         if (request.getAddress() != null) hospital.setAddress(request.getAddress());
         if (request.getType() != null) hospital.setType(request.getType());
-        if (request.getLatitude() != null) hospital.setLatitude(request.getLatitude());
-        if (request.getLongitude() != null) hospital.setLongitude(request.getLongitude());
         if (request.getElevationMeters() != null) hospital.setElevationMeters(request.getElevationMeters());
         if (request.getTotalGeneralBeds() != null) hospital.setTotalGeneralBeds(request.getTotalGeneralBeds());
         if (request.getTotalIcuBeds() != null) hospital.setTotalIcuBeds(request.getTotalIcuBeds());
         if (request.getSpecialities() != null) hospital.setSpecialities(request.getSpecialities());
         if (request.getIsAcceptingPatients() != null) hospital.setIsAcceptingPatients(request.getIsAcceptingPatients());
+        if (request.getAdminUserId() != null) hospital.setAdminUserId(request.getAdminUserId());
+        if (request.getStatusReason() != null) hospital.setStatusReason(request.getStatusReason());
 
-        // If coordinates changed, update Redis GEO
-        if (request.getLatitude() != null || request.getLongitude() != null) {
-            geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        boolean coordsChanged = false;
+        double oldLat = hospital.getLatitude();
+        double oldLon = hospital.getLongitude();
+
+        if (request.getLatitude() != null && !request.getLatitude().equals(hospital.getLatitude())) {
+            hospital.setLatitude(request.getLatitude());
+            coordsChanged = true;
+        }
+        if (request.getLongitude() != null && !request.getLongitude().equals(hospital.getLongitude())) {
+            hospital.setLongitude(request.getLongitude());
+            coordsChanged = true;
+        }
+
+        if (coordsChanged) {
+            hospital.setLocationLastUpdatedAt(LocalDateTime.now());
+            if (hospital.getStatus() == HospitalStatus.ACTIVE) {
+                geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+            }
+            recordAudit(hospital.getId(), null, "ADMIN", "LOCATION_UPDATE", "Coordinates updated",
+                    oldLat + "," + oldLon, hospital.getLatitude() + "," + hospital.getLongitude());
         }
 
         hospital = hospitalRepository.save(hospital);
+        recordAudit(hospital.getId(), null, "ADMIN", "UPDATE", "Hospital attributes updated", null, null);
         log.info("Admin updated hospital: {}", hospital.getName());
         return mapToResponse(hospital);
     }
@@ -240,6 +323,12 @@ public class HospitalServiceImpl implements HospitalService {
     @Override
     @Transactional
     public HospitalResponse changeHospitalStatus(UUID id, HospitalStatus newStatus) {
+        return changeHospitalStatus(id, newStatus, null, null, "ADMIN");
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse changeHospitalStatus(UUID id, HospitalStatus newStatus, String reason, UUID actorId, String actorRole) {
         Hospital hospital = hospitalRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + id));
 
@@ -250,6 +339,10 @@ public class HospitalServiceImpl implements HospitalService {
         }
 
         hospital.setStatus(newStatus);
+        if (reason != null && !reason.isBlank()) {
+            hospital.setStatusReason(reason.trim());
+        }
+        hospital.setEmergencyStatusLastUpdatedAt(LocalDateTime.now());
         hospital = hospitalRepository.save(hospital);
 
         // Sync Redis GEO based on new status
@@ -258,11 +351,107 @@ public class HospitalServiceImpl implements HospitalService {
             geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
             log.info("Hospital {} reactivated and added to geo index", id);
         } else {
-            // Remove from geo index for SUSPENDED/DEACTIVATED
+            // Remove from geo index for SUSPENDED/DEACTIVATED/REJECTED
             geoService.removeHospitalLocation(id);
             log.info("Hospital {} status changed to {} and removed from geo index", id, newStatus);
         }
 
+        recordAudit(hospital.getId(), actorId, actorRole, "STATUS_CHANGE",
+                reason != null ? "Status change reason: " + reason : "Status changed",
+                oldStatus.name(), newStatus.name());
+
         return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse verifyHospital(UUID id, UUID actorId, String actorRole) {
+        Hospital hospital = hospitalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + id));
+
+        HospitalStatus oldStatus = hospital.getStatus();
+        hospital.setStatus(HospitalStatus.ACTIVE);
+        hospital.setVerifiedBy(actorId);
+        hospital.setVerifiedAt(LocalDateTime.now());
+        hospital.setStatusReason(null);
+        hospital.setEmergencyStatusLastUpdatedAt(LocalDateTime.now());
+        hospital = hospitalRepository.save(hospital);
+
+        geoService.registerHospitalLocation(hospital.getId(), hospital.getLatitude(), hospital.getLongitude());
+        recordAudit(hospital.getId(), actorId, actorRole, "VERIFY", "Hospital verified and activated",
+                oldStatus != null ? oldStatus.name() : "PENDING_VERIFICATION", HospitalStatus.ACTIVE.name());
+
+        log.info("Hospital {} officially verified by {}", id, actorId);
+        return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse rejectHospital(UUID id, String reason, UUID actorId, String actorRole) {
+        Hospital hospital = hospitalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + id));
+
+        HospitalStatus oldStatus = hospital.getStatus();
+        hospital.setStatus(HospitalStatus.REJECTED);
+        hospital.setVerifiedBy(actorId);
+        hospital.setVerifiedAt(LocalDateTime.now());
+        hospital.setStatusReason(reason != null ? reason.trim() : "Rejected by authority");
+        hospital.setEmergencyStatusLastUpdatedAt(LocalDateTime.now());
+        hospital = hospitalRepository.save(hospital);
+
+        geoService.removeHospitalLocation(id);
+        recordAudit(hospital.getId(), actorId, actorRole, "REJECT", "Hospital registration rejected: " + reason,
+                oldStatus != null ? oldStatus.name() : "PENDING_VERIFICATION", HospitalStatus.REJECTED.name());
+
+        log.info("Hospital {} rejected by {}: {}", id, actorId, reason);
+        return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HospitalAudit> getHospitalAudits(UUID hospitalId) {
+        return auditRepository.findByHospitalIdOrderByOccurredAtDesc(hospitalId);
+    }
+
+    @Override
+    @Transactional
+    public HospitalResponse updateBedCapacity(UUID id, HospitalBedUpdateRequest request) {
+        Hospital hospital = hospitalRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + id));
+
+        if (request.getAvailableGeneralBeds() > hospital.getTotalGeneralBeds()) {
+            throw new IllegalArgumentException("Available general beds (" + request.getAvailableGeneralBeds()
+                    + ") cannot exceed total general beds (" + hospital.getTotalGeneralBeds() + ")");
+        }
+        if (request.getAvailableIcuBeds() > hospital.getTotalIcuBeds()) {
+            throw new IllegalArgumentException("Available ICU beds (" + request.getAvailableIcuBeds()
+                    + ") cannot exceed total ICU beds (" + hospital.getTotalIcuBeds() + ")");
+        }
+
+        int prevGen = hospital.getAvailableGeneralBeds();
+        int prevIcu = hospital.getAvailableIcuBeds();
+
+        hospital.setAvailableGeneralBeds(request.getAvailableGeneralBeds());
+        hospital.setAvailableIcuBeds(request.getAvailableIcuBeds());
+        hospital.setBedLastUpdatedAt(LocalDateTime.now());
+
+        hospital = hospitalRepository.save(hospital);
+
+        recordAudit(hospital.getId(), null, "STAFF", "BED_UPDATE",
+                "Bed capacity updated",
+                "general=" + prevGen + ",icu=" + prevIcu,
+                "general=" + request.getAvailableGeneralBeds() + ",icu=" + request.getAvailableIcuBeds());
+
+        log.info("Updated bed capacity for hospital {}: general={}, icu={}",
+                hospital.getName(), request.getAvailableGeneralBeds(), request.getAvailableIcuBeds());
+        return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<HospitalResponse> searchHospitalsByName(String name, Pageable pageable) {
+        Page<Hospital> page = hospitalRepository.findByNameContainingIgnoreCaseAndStatus(
+                name, HospitalStatus.ACTIVE, pageable);
+        return page.map(this::mapToResponse);
     }
 }

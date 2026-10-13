@@ -76,6 +76,75 @@ public class NotificationDispatchService {
         sendAndLogEmail(targetEmail, subject, alertMessage, "LOGISTICS_DISPATCH");
     }
 
+    @Transactional
+    public int dispatchSafetyCheckInAlert(List<String> targetEmails, String senderName, String statusMessage, Double latitude, Double longitude, String timestamp) {
+        String locInfo = (latitude != null && longitude != null)
+                ? String.format("Location: Coordinates [%.4f, %.4f]\nMap: https://maps.google.com/?q=%.4f,%.4f\n", latitude, longitude, latitude, longitude)
+                : "Location: Not shared by user\n";
+
+        String subject = "🟢 I'm Safe: Safety check-in from " + (senderName != null ? senderName : "a family member");
+        String alertMessage = String.format(
+                "FAMILY SAFETY CHECK-IN UPDATE\n\n" +
+                        "%s has checked in as SAFE on the Disaster Management System (DMS).\n\n" +
+                        "Timestamp: %s\n" +
+                        "%s" +
+                        "Note from %s: %s\n\n" +
+                        "-- Disaster Management System Personal Safety Network",
+                (senderName != null ? senderName : "Your contact"),
+                (timestamp != null ? timestamp : "Recently"),
+                locInfo,
+                (senderName != null ? senderName : "Contact"),
+                (statusMessage != null && !statusMessage.isBlank() ? statusMessage : "I am safe.")
+        );
+
+        int sentCount = 0;
+        if (targetEmails != null) {
+            for (String email : targetEmails) {
+                if (email != null && !email.isBlank()) {
+                    sendAndLogEmail(email.trim(), subject, alertMessage, "SAFETY_CHECKIN");
+                    sentCount++;
+                }
+            }
+        }
+        return sentCount;
+    }
+
+    @Transactional
+    public int dispatchSosEmergencyAlert(List<String> targetEmails, String senderName, String emergencyMessage, Double latitude, Double longitude, String timestamp) {
+        String locInfo = (latitude != null && longitude != null)
+                ? String.format("Coordinates: [%.5f, %.5f]\nGoogle Maps: https://maps.google.com/?q=%.5f,%.5f\n", latitude, longitude, latitude, longitude)
+                : "Coordinates: Location unavailable or permission not granted by device\n";
+
+        String subject = "🚨 URGENT SOS ALERT: " + (senderName != null ? senderName : "Your contact") + " needs immediate emergency assistance!";
+        String alertMessage = String.format(
+                "CRITICAL SOS EMERGENCY ALERT\n\n" +
+                        "EMERGENCY ADVISORY: %s has activated a priority SOS distress alert on the Disaster Management System!\n\n" +
+                        "Time: %s\n" +
+                        "%s\n" +
+                        "Emergency Message:\n\"%s\"\n\n" +
+                        "URGENT ACTIONS FOR TRUSTED CONTACTS:\n" +
+                        "1. Try calling the contact immediately.\n" +
+                        "2. If unreachable and in grave danger, inform emergency authorities (Dial 112 / 108 in India).\n" +
+                        "3. Share these verified coordinates with first responders if rescue is needed.\n\n" +
+                        "-- Disaster Management System Automated SOS Network",
+                (senderName != null ? senderName : "Your contact"),
+                (timestamp != null ? timestamp : "Just now"),
+                locInfo,
+                (emergencyMessage != null && !emergencyMessage.isBlank() ? emergencyMessage : "I need immediate emergency assistance!")
+        );
+
+        int sentCount = 0;
+        if (targetEmails != null) {
+            for (String email : targetEmails) {
+                if (email != null && !email.isBlank()) {
+                    sendAndLogEmail(email.trim(), subject, alertMessage, "SOS_ALERT");
+                    sentCount++;
+                }
+            }
+        }
+        return sentCount;
+    }
+
     private void sendAndLogEmail(String recipientEmail, String subject, String body, String type) {
         try {
             SimpleMailMessage mailMessage = new SimpleMailMessage();

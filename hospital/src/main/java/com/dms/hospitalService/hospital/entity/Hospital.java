@@ -72,9 +72,31 @@ public class Hospital {
     @Column(nullable = false)
     private Boolean isAcceptingPatients = true;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 16)
+    @Column(nullable = false, length = 32)
     private HospitalStatus status = HospitalStatus.ACTIVE;
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
+    @Column(name = "admin_user_id")
+    private UUID adminUserId;
+
+    @Column(name = "verified_by")
+    private UUID verifiedBy;
+
+    @Column(name = "verified_at")
+    private LocalDateTime verifiedAt;
+
+    @Column(name = "location_last_updated_at")
+    private LocalDateTime locationLastUpdatedAt;
+
+    @Column(name = "bed_last_updated_at")
+    private LocalDateTime bedLastUpdatedAt;
+
+    @Column(name = "emergency_status_last_updated_at")
+    private LocalDateTime emergencyStatusLastUpdatedAt;
 
     @CreationTimestamp
     @Column(updatable = false)

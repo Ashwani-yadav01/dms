@@ -43,6 +43,7 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
             hospital.setAvailableGeneralBeds(hospital.getAvailableGeneralBeds() - 1);
         }
 
+        hospital.setBedLastUpdatedAt(LocalDateTime.now());
         hospitalRepository.save(hospital);
 
         PatientAdmission admission = PatientAdmission.builder()
@@ -79,6 +80,7 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
             hospital.setAvailableGeneralBeds(hospital.getAvailableGeneralBeds() + 1);
         }
 
+        hospital.setBedLastUpdatedAt(LocalDateTime.now());
         hospitalRepository.save(hospital);
 
         admission.setDischargedAt(LocalDateTime.now());

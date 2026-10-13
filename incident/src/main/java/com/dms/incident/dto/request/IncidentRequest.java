@@ -33,4 +33,9 @@ public class IncidentRequest {
 
     @NotBlank(message = "Please provide an image URL of the incident to assist rescue operations")
     private String imageUrl;
+
+    private Double deviceLatitude;
+    private Double deviceLongitude;
+    private Boolean isReportingOnBehalf;
+    private com.dms.incident.entity.LocationSource locationSource;
 }

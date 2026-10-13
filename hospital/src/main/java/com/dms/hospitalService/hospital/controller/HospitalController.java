@@ -1,8 +1,10 @@
 package com.dms.hospitalService.hospital.controller;
 
+import com.dms.hospitalService.hospital.dto.request.HospitalBedUpdateRequest;
 import com.dms.hospitalService.hospital.dto.request.HospitalCreateRequest;
 import com.dms.hospitalService.hospital.dto.request.HospitalUpdateRequest;
 import com.dms.hospitalService.hospital.dto.response.HospitalResponse;
+import com.dms.hospitalService.hospital.entity.HospitalAudit;
 import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
 import com.dms.hospitalService.hospital.service.HospitalService;
@@ -29,8 +31,21 @@ public class HospitalController {
     private final HospitalService hospitalService;
 
     @PostMapping
-    public ResponseEntity<HospitalResponse> createHospital(@Valid @RequestBody HospitalCreateRequest request) {
-        return new ResponseEntity<>(hospitalService.createHospital(request), HttpStatus.CREATED);
+    public ResponseEntity<HospitalResponse> createHospital(
+            HttpServletRequest request,
+            @Valid @RequestBody HospitalCreateRequest hospitalRequest) {
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role) && !"HOSPITAL".equals(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        UUID actorId = extractUserId(request);
+        if ("HOSPITAL".equals(role)) {
+            hospitalRequest.setAdminUserId(actorId);
+            hospitalRequest.setStatus(HospitalStatus.PENDING_VERIFICATION);
+        } else if (hospitalRequest.getStatus() == null) {
+            hospitalRequest.setStatus(HospitalStatus.ACTIVE);
+        }
+        return new ResponseEntity<>(hospitalService.createHospital(hospitalRequest), HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
@@ -40,9 +55,24 @@ public class HospitalController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<HospitalResponse> toggleAcceptingPatients(
+            HttpServletRequest request,
             @PathVariable UUID id,
             @RequestParam Boolean isAccepting) {
+        if (!canManageHospital(request, id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(hospitalService.toggleAcceptingPatients(id, isAccepting));
+    }
+
+    @PatchMapping("/{id}/beds")
+    public ResponseEntity<HospitalResponse> updateBedCapacity(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @Valid @RequestBody HospitalBedUpdateRequest bedRequest) {
+        if (!canManageHospital(request, id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(hospitalService.updateBedCapacity(id, bedRequest));
     }
 
     // 🚨 The Smart Routing Endpoint
@@ -57,6 +87,15 @@ public class HospitalController {
         List<HospitalResponse> nearest = hospitalService.findNearestCapableHospitals(
                 latitude, longitude, radiusKm, specialities, requiresIcu);
         return ResponseEntity.ok(nearest);
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<Page<HospitalResponse>> searchHospitalsByName(
+            @RequestParam String name,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
+        return ResponseEntity.ok(hospitalService.searchHospitalsByName(name, pageable));
     }
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteHospital(@PathVariable UUID id) {
@@ -133,17 +172,89 @@ public class HospitalController {
     public ResponseEntity<HospitalResponse> changeHospitalStatus(
             HttpServletRequest request,
             @PathVariable UUID id,
-            @RequestParam HospitalStatus status) {
+            @RequestParam HospitalStatus status,
+            @RequestParam(required = false) String reason) {
 
         String role = request.getHeader("X-User-Role");
         if (!isAdminRole(role)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        return ResponseEntity.ok(hospitalService.changeHospitalStatus(id, status));
+        UUID actorId = extractUserId(request);
+        return ResponseEntity.ok(hospitalService.changeHospitalStatus(id, status, reason, actorId, role));
+    }
+
+    @PatchMapping("/admin/{id}/verify")
+    public ResponseEntity<HospitalResponse> verifyHospital(
+            HttpServletRequest request,
+            @PathVariable UUID id) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        UUID actorId = extractUserId(request);
+        return ResponseEntity.ok(hospitalService.verifyHospital(id, actorId, role));
+    }
+
+    @PatchMapping("/admin/{id}/reject")
+    public ResponseEntity<HospitalResponse> rejectHospital(
+            HttpServletRequest request,
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "Rejected by authorized official") String reason) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        UUID actorId = extractUserId(request);
+        return ResponseEntity.ok(hospitalService.rejectHospital(id, reason, actorId, role));
+    }
+
+    @GetMapping("/admin/{id}/audits")
+    public ResponseEntity<List<HospitalAudit>> getHospitalAudits(
+            HttpServletRequest request,
+            @PathVariable UUID id) {
+
+        String role = request.getHeader("X-User-Role");
+        if (!isAdminRole(role) && !canManageHospital(request, id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(hospitalService.getHospitalAudits(id));
     }
 
     private boolean isAdminRole(String role) {
-        return "GOVERNMENT_OFFICIAL".equals(role) || "DISTRICT_ADMIN".equals(role);
+        return "GOVERNMENT_OFFICIAL".equals(role) || "DISTRICT_ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
+    }
+
+    private boolean canManageHospital(HttpServletRequest request, UUID hospitalId) {
+        String role = request.getHeader("X-User-Role");
+        if (isAdminRole(role)) {
+            return true;
+        }
+        if ("HOSPITAL".equals(role)) {
+            UUID actorId = extractUserId(request);
+            if (actorId == null) return false;
+            try {
+                HospitalResponse h = hospitalService.getHospitalById(hospitalId);
+                return h.getAdminUserId() == null || h.getAdminUserId().equals(actorId);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private UUID extractUserId(HttpServletRequest request) {
+        String idHeader = request.getHeader("X-User-Id");
+        if (idHeader != null && !idHeader.isBlank()) {
+            try {
+                return UUID.fromString(idHeader);
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 }

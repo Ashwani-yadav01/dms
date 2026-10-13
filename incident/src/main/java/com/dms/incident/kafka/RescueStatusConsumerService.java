@@ -16,8 +16,9 @@ public class RescueStatusConsumerService {
     private final IncidentService incidentService;
 
     @KafkaListener(
-            topics = "rescue-mission-status-topic",
-            groupId = "incident-service-group"
+            topics = "${app.kafka.topics.rescue-mission-status:rescue-mission-status-topic}",
+            groupId = "${spring.kafka.consumer.group-id:incident-service-group}",
+            containerFactory = "rescueStatusKafkaListenerContainerFactory"
     )
     public void consumeStatusUpdate(@Payload RescueMissionStatusUpdatedEvent event) {
         log.info("Received mission update for Incident ID: {}, Status: {}",

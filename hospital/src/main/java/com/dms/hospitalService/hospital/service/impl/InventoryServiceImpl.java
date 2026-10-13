@@ -160,6 +160,34 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryRepository.deleteById(id);
         log.info("Deleted inventory item ID: {}", id);
     }
+
+    @Override
+    @Transactional
+    public List<InventoryResponse> batchUpdateInventory(UUID hospitalId, List<InventoryUpdateRequest> requests) {
+        Hospital hospital = hospitalRepository.findById(hospitalId)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found: " + hospitalId));
+
+        return requests.stream().map(req -> {
+            MedicalInventory item = inventoryRepository.findByHospitalIdAndItemTypeForUpdate(hospitalId, req.getItemType())
+                    .orElseGet(() -> MedicalInventory.builder()
+                            .hospital(hospital)
+                            .itemType(req.getItemType())
+                            .currentQuantity(0)
+                            .criticalThreshold(req.getCriticalThreshold() != null ? req.getCriticalThreshold() : 20)
+                            .build());
+
+            int updatedQuantity = item.getCurrentQuantity() + req.getQuantityChange();
+            if (updatedQuantity < 0) {
+                updatedQuantity = 0;
+            }
+            item.setCurrentQuantity(updatedQuantity);
+            if (req.getCriticalThreshold() != null) {
+                item.setCriticalThreshold(req.getCriticalThreshold());
+            }
+            return mapToResponse(inventoryRepository.save(item));
+        }).collect(Collectors.toList());
+    }
+
     private InventoryResponse mapToResponse(MedicalInventory i) {
         return InventoryResponse.builder()
                 .id(i.getId())

@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Email;
 import lombok.Data;
 
 import java.util.Set;
+import java.util.UUID;
 
 @Data
 public class HospitalUpdateRequest {
@@ -39,4 +40,7 @@ public class HospitalUpdateRequest {
     private Set<MedicalSpeciality> specialities;
 
     private Boolean isAcceptingPatients;
+
+    private UUID adminUserId;
+    private String statusReason;
 }

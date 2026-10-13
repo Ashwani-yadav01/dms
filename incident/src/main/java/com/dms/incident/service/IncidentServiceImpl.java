@@ -7,6 +7,8 @@ import com.dms.incident.dto.response.IncidentResponse;
 import com.dms.incident.entity.Incident;
 import com.dms.incident.entity.IncidentStatus;
 import com.dms.incident.entity.IncidentAction;
+import com.dms.incident.entity.LocationTrustLevel;
+import com.dms.incident.entity.LocationSource;
 import com.dms.incident.entity.Severity;
 import com.dms.incident.exception.IncidentNotFoundException;
 import com.dms.incident.exception.BadRequestException;
@@ -76,6 +78,33 @@ public class IncidentServiceImpl implements IncidentService {
         Incident newIncident = mapper.map(request, Incident.class);
         newIncident.setReportedBy(actorId);
         newIncident.setStatus(IncidentStatus.REPORTED);
+
+        // Location Trust and Discrepancy Evaluation (Anti-Spoofing & Remote Reporting)
+        boolean onBehalf = Boolean.TRUE.equals(request.getIsReportingOnBehalf());
+        newIncident.setIsReportingOnBehalf(onBehalf);
+        newIncident.setDeviceLatitude(request.getDeviceLatitude());
+        newIncident.setDeviceLongitude(request.getDeviceLongitude());
+        newIncident.setLocationSource(request.getLocationSource() != null ? request.getLocationSource() : LocationSource.MANUAL_COORDINATES);
+
+        if (request.getDeviceLatitude() != null && request.getDeviceLongitude() != null) {
+            double discrepancy = calculateDistanceInMeters(
+                    request.getDeviceLatitude(), request.getDeviceLongitude(),
+                    request.getLatitude(), request.getLongitude()
+            );
+            newIncident.setLocationDiscrepancyMeters(discrepancy);
+
+            if (onBehalf) {
+                newIncident.setLocationTrustLevel(LocationTrustLevel.REMOTE_REPORT);
+            } else if (discrepancy <= 500.0) {
+                newIncident.setLocationTrustLevel(LocationTrustLevel.MATCH);
+            } else if (discrepancy <= 5000.0) {
+                newIncident.setLocationTrustLevel(LocationTrustLevel.MINOR_MISMATCH);
+            } else {
+                newIncident.setLocationTrustLevel(LocationTrustLevel.LARGE_MISMATCH);
+            }
+        } else {
+            newIncident.setLocationTrustLevel(onBehalf ? LocationTrustLevel.REMOTE_REPORT : LocationTrustLevel.UNVERIFIED);
+        }
 
         double radiusInKm = DUPLICATE_RADIUS_METERS / 1000.0;
         List<Incident> nearbyIncidents = repository.findNearbyActiveIncidents(

@@ -43,6 +43,27 @@ public class Incident {
     @Column(nullable = false)
     private Double longitude;
 
+    @Column(name = "device_latitude")
+    private Double deviceLatitude;
+
+    @Column(name = "device_longitude")
+    private Double deviceLongitude;
+
+    @Builder.Default
+    @Column(name = "is_reporting_on_behalf", nullable = false)
+    private Boolean isReportingOnBehalf = false;
+
+    @Column(name = "location_discrepancy_meters")
+    private Double locationDiscrepancyMeters;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "location_trust_level", length = 32)
+    private LocationTrustLevel locationTrustLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "location_source", length = 32)
+    private LocationSource locationSource;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Severity severity;

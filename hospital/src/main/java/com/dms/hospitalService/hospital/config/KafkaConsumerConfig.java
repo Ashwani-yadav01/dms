@@ -1,6 +1,8 @@
 package com.dms.hospitalService.hospital.config;
 
 import com.dms.hospitalService.hospital.kafka.event.IncidentCreatedEvent;
+import com.dms.hospitalService.hospital.kafka.event.SupplyDispatchedEvent;
+import com.dms.hospitalService.hospital.kafka.event.VictimsExtractedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -135,6 +137,64 @@ public class KafkaConsumerConfig {
                 incidentCreatedConsumerFactory()
         );
 
+        return factory;
+    }
+
+    // ==========================================
+    // SUPPLY DISPATCHED CONSUMER & FACTORY
+    // ==========================================
+
+    @Bean
+    public ConsumerFactory<String, SupplyDispatchedEvent> supplyDispatchedConsumerFactory() {
+        JsonDeserializer<SupplyDispatchedEvent> jsonDeserializer =
+                new JsonDeserializer<>(SupplyDispatchedEvent.class, objectMapper());
+        jsonDeserializer.addTrustedPackages("com.dms.hospitalService.hospital.kafka.event");
+        jsonDeserializer.setUseTypeHeaders(false);
+
+        ErrorHandlingDeserializer<SupplyDispatchedEvent> errorHandlingDeserializer =
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+
+        return new DefaultKafkaConsumerFactory<>(
+                consumerProperties(),
+                new StringDeserializer(),
+                errorHandlingDeserializer
+        );
+    }
+
+    @Bean(name = "supplyDispatchedKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, SupplyDispatchedEvent> supplyDispatchedKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, SupplyDispatchedEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(supplyDispatchedConsumerFactory());
+        return factory;
+    }
+
+    // ==========================================
+    // VICTIMS EXTRACTED CONSUMER & FACTORY
+    // ==========================================
+
+    @Bean
+    public ConsumerFactory<String, VictimsExtractedEvent> victimsExtractedConsumerFactory() {
+        JsonDeserializer<VictimsExtractedEvent> jsonDeserializer =
+                new JsonDeserializer<>(VictimsExtractedEvent.class, objectMapper());
+        jsonDeserializer.addTrustedPackages("com.dms.hospitalService.hospital.kafka.event");
+        jsonDeserializer.setUseTypeHeaders(false);
+
+        ErrorHandlingDeserializer<VictimsExtractedEvent> errorHandlingDeserializer =
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+
+        return new DefaultKafkaConsumerFactory<>(
+                consumerProperties(),
+                new StringDeserializer(),
+                errorHandlingDeserializer
+        );
+    }
+
+    @Bean(name = "victimsExtractedKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, VictimsExtractedEvent> victimsExtractedKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, VictimsExtractedEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(victimsExtractedConsumerFactory());
         return factory;
     }
 }

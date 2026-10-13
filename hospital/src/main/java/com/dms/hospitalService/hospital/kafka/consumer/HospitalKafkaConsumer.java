@@ -52,7 +52,11 @@ public class HospitalKafkaConsumer {
     }
 
     // 2. Trigger when Logistics dispatches emergency supplies to this hospital
-    @KafkaListener(topics = "${application.kafka.topic.supply-dispatched:supply-dispatched-topic}", groupId = "hospital-service-group")
+    @KafkaListener(
+            topics = "${application.kafka.topic.supply-dispatched:supply-dispatched-topic}",
+            groupId = "hospital-service-group",
+            containerFactory = "supplyDispatchedKafkaListenerContainerFactory"
+    )
     public void consumeSupplyDispatched(SupplyDispatchedEvent event) {
         log.info("🚚 [Hospital-Service] Incoming Supply Notice for Hospital ID: {}", event.getTargetHospitalId());
         log.info("Order: {}, Item: {}, Dispatched Qty: {} from Warehouse: {}",
@@ -68,5 +72,16 @@ public class HospitalKafkaConsumer {
                     event.getDispatchedQuantity()
             );
         }
+    }
+
+    // 3. Trigger when Rescue completes extraction and reports casualties/victims
+    @KafkaListener(
+            topics = "${application.kafka.topic.victims-extracted:victims-extracted-topic}",
+            groupId = "hospital-service-group",
+            containerFactory = "victimsExtractedKafkaListenerContainerFactory"
+    )
+    public void consumeVictimsExtracted(VictimsExtractedEvent event) {
+        log.info("🚨 [Hospital-Service] Victims extracted notification received: Mission ID: {}, Incident ID: {}, Total Victims: {}",
+                event.getMissionId(), event.getIncidentId(), event.getTotalVictims());
     }
 }

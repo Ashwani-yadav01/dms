@@ -37,5 +37,29 @@ public class NotificationController {
         return ResponseEntity.ok("Emergency test email dispatched to " + email);
     }
 
+    @PostMapping("/personal/safety-checkin")
+    public ResponseEntity<Integer> sendSafetyCheckInAlert(@RequestBody com.dms.notificationService.dto.PersonalAlertRequest request) {
+        int sent = dispatchService.dispatchSafetyCheckInAlert(
+                request.getRecipientEmails(),
+                request.getSenderName(),
+                request.getMessage(),
+                request.getLatitude(),
+                request.getLongitude(),
+                request.getTimestamp()
+        );
+        return ResponseEntity.ok(sent);
+    }
 
+    @PostMapping("/personal/sos")
+    public ResponseEntity<Integer> sendSosAlert(@RequestBody com.dms.notificationService.dto.PersonalAlertRequest request) {
+        int sent = dispatchService.dispatchSosEmergencyAlert(
+                request.getRecipientEmails(),
+                request.getSenderName(),
+                request.getMessage(),
+                request.getLatitude(),
+                request.getLongitude(),
+                request.getTimestamp()
+        );
+        return ResponseEntity.ok(sent);
+    }
 }

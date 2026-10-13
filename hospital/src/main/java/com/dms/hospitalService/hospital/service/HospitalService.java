@@ -32,4 +32,10 @@ public interface HospitalService {
     HospitalResponse createHospitalAdmin(HospitalCreateRequest request);
     HospitalResponse updateHospital(UUID id, HospitalUpdateRequest request);
     HospitalResponse changeHospitalStatus(UUID id, HospitalStatus newStatus);
+    HospitalResponse changeHospitalStatus(UUID id, HospitalStatus newStatus, String reason, UUID actorId, String actorRole);
+    HospitalResponse verifyHospital(UUID id, UUID actorId, String actorRole);
+    HospitalResponse rejectHospital(UUID id, String reason, UUID actorId, String actorRole);
+    List<com.dms.hospitalService.hospital.entity.HospitalAudit> getHospitalAudits(UUID hospitalId);
+    HospitalResponse updateBedCapacity(UUID id, com.dms.hospitalService.hospital.dto.request.HospitalBedUpdateRequest request);
+    Page<HospitalResponse> searchHospitalsByName(String name, Pageable pageable);
 }

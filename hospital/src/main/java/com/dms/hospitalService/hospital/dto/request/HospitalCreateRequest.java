@@ -1,6 +1,7 @@
 package com.dms.hospitalService.hospital.dto.request;
 
 import com.dms.hospitalService.hospital.entity.FacilityType;
+import com.dms.hospitalService.hospital.entity.HospitalStatus;
 import com.dms.hospitalService.hospital.entity.MedicalSpeciality;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Email;
 import lombok.Data;
 
 import java.util.Set;
+import java.util.UUID;
 
 @Data
 public class HospitalCreateRequest {
@@ -46,4 +48,8 @@ public class HospitalCreateRequest {
 
     // Optional list of specialities (e.g. BURN_UNIT, TRAUMA_CENTER)
     private Set<MedicalSpeciality> specialities;
+
+    // Optional admin user assignment and initial status
+    private UUID adminUserId;
+    private HospitalStatus status;
 }

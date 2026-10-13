@@ -19,6 +19,7 @@ import java.util.UUID;
 public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
     Optional<Hospital> findByName(String name);
+    Page<Hospital> findByNameContainingIgnoreCaseAndStatus(String name, HospitalStatus status, Pageable pageable);
 
     // 🚨 The critical lock for allocating beds during mass casualties
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -29,6 +29,12 @@ public class IncidentResponse {
     private IncidentType incidentType;
     private IncidentStatus status;
     private UUID reportedBy;
+    private Double deviceLatitude;
+    private Double deviceLongitude;
+    private Boolean isReportingOnBehalf;
+    private Double locationDiscrepancyMeters;
+    private com.dms.incident.entity.LocationTrustLevel locationTrustLevel;
+    private com.dms.incident.entity.LocationSource locationSource;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

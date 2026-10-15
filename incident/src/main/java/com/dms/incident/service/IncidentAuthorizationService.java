@@ -3,6 +3,7 @@ package com.dms.incident.service;
 import com.dms.incident.entity.Incident;
 import com.dms.incident.entity.IncidentAction;
 import com.dms.incident.exception.IncidentAuthorizationException;
+import com.dms.incident.entity.IncidentType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,10 @@ public class IncidentAuthorizationService {
         return authentication().getAuthorities().stream().map(a -> a.getAuthority()).findFirst()
                 .orElse("").replace("ROLE_", "");
     }
+    public boolean isDistrictOrSuperAdmin() {
+        String r = role();
+        return "DISTRICT_ADMIN".equals(r) || "SUPER_ADMIN".equals(r);
+    }
     public boolean claimTrue(String name) {
         Object details = authentication().getDetails();
         return details instanceof Map<?, ?> claims && Boolean.TRUE.equals(claims.get(name));
@@ -33,7 +38,7 @@ public class IncidentAuthorizationService {
         authorize(null, IncidentAction.CREATE);
     }
     public void requireDistrictAdmin() {
-        if (!"DISTRICT_ADMIN".equals(role())) deny();
+        if (!isDistrictOrSuperAdmin()) deny();
     }
     public void requireOwnerEditable(Incident incident) {
         authorize(incident, IncidentAction.UPDATE);
@@ -42,6 +47,7 @@ public class IncidentAuthorizationService {
         authorize(incident, IncidentAction.VIEW);
     }
     public boolean canView(Incident incident) {
+        if (isDistrictOrSuperAdmin()) return true;
         UUID actor = userId();
         return ("CITIZEN".equals(role()) && actor.equals(incident.getReportedBy()))
                 || isVerifiedOfficialWithinRange(incident) || isAssignedRescueTeam(incident);
@@ -52,22 +58,31 @@ public class IncidentAuthorizationService {
                 ? IncidentAction.RESOLVE : IncidentAction.VERIFY;
         authorize(incident, action);
     }
+    public boolean isOfficialAuthorizedForIncidentType(IncidentType type) {
+        if (type == null) return false;
+        if (isDistrictOrSuperAdmin()) return true;
+        if (!"GOVERNMENT_OFFICIAL".equals(role())) return false;
+        String deptCategory = claim("departmentCategory");
+        return IncidentDepartmentPolicy.isAuthorized(deptCategory, type);
+    }
     public void authorize(Incident incident, IncidentAction action) {
         UUID actor = userId();
         if (action == IncidentAction.CREATE || action == IncidentAction.ASSIGN_OFFICIAL) {
             if (action == IncidentAction.CREATE && !"CITIZEN".equals(role())) deny();
-            if (action == IncidentAction.ASSIGN_OFFICIAL && !"DISTRICT_ADMIN".equals(role())) deny();
+            if (action == IncidentAction.ASSIGN_OFFICIAL && !isDistrictOrSuperAdmin()) deny();
             return;
         }
         if (incident == null) deny();
         boolean ownerEditable = "CITIZEN".equals(role()) && actor.equals(incident.getReportedBy())
                 && incident.getStatus() == com.dms.incident.entity.IncidentStatus.REPORTED;
-        boolean officialInRange = isVerifiedOfficialWithinRange(incident);
+        boolean officialInRange = isDistrictOrSuperAdmin() || isVerifiedOfficialWithinRange(incident);
         boolean assignedOfficial = isVerifiedAssignedOfficial(incident, actor);
         boolean allowed = switch (action) {
             case VIEW -> canView(incident);
             case UPDATE, DELETE -> ownerEditable;
-            case VERIFY, REJECT -> officialInRange && incident.getStatus() == com.dms.incident.entity.IncidentStatus.REPORTED;
+            case VERIFY, REJECT -> officialInRange
+                    && isOfficialAuthorizedForIncidentType(incident.getIncidentType())
+                    && incident.getStatus() == com.dms.incident.entity.IncidentStatus.REPORTED;
             case ASSIGN_OFFICIAL -> false;
             case RESOLVE -> assignedOfficial && incident.getStatus() == com.dms.incident.entity.IncidentStatus.DISPATCHED;
             case CREATE -> false;
@@ -92,7 +107,7 @@ public class IncidentAuthorizationService {
         return distanceKm(area.latitude(), area.longitude(), incident.getLatitude(), incident.getLongitude())
                 <= area.radiusKm();
     }
-    private DutyArea officialDutyArea() {
+    public DutyArea officialDutyArea() {
         if (!isVerifiedOfficialIdentity()) return null;
         try {
             double latitude = Double.parseDouble(claim("officialLatitude"));

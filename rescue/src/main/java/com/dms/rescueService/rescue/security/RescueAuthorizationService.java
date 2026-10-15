@@ -11,7 +11,7 @@ import java.util.UUID;
 @Service
 public class RescueAuthorizationService {
     public void requireDispatcher() {
-        if (!"DISTRICT_ADMIN".equals(role())) deny();
+        if (!"DISTRICT_ADMIN".equals(role()) && !"SUPER_ADMIN".equals(role())) deny();
     }
     public UUID currentUserIdOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -22,12 +22,16 @@ public class RescueAuthorizationService {
         if (!"RESCUE_TEAM".equals(role()) || !claimTrue("rescueVerified") || departmentId == null
                 || !mission.getDepartment().getId().toString().equals(departmentId)) deny();
     }
+    public void requireAssignedTeamOrDispatcher(RescueMission mission) {
+        if ("DISTRICT_ADMIN".equals(role()) || "SUPER_ADMIN".equals(role())) return;
+        requireAssignedTeam(mission);
+    }
     public void requireMissionView(RescueMission mission) {
-        if ("DISTRICT_ADMIN".equals(role())) return;
+        if ("DISTRICT_ADMIN".equals(role()) || "SUPER_ADMIN".equals(role())) return;
         requireAssignedTeam(mission);
     }
     public void requireDepartmentView(UUID departmentId) {
-        if ("DISTRICT_ADMIN".equals(role())) return;
+        if ("DISTRICT_ADMIN".equals(role()) || "SUPER_ADMIN".equals(role())) return;
         if (!"RESCUE_TEAM".equals(role()) || !claimTrue("rescueVerified")
                 || !departmentId.toString().equals(claim("rescueDepartmentId"))) deny();
     }

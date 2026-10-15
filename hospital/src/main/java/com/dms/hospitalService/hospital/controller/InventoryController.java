@@ -2,7 +2,9 @@ package com.dms.hospitalService.hospital.controller;
 
 import com.dms.hospitalService.hospital.dto.request.InventoryCreateRequest;
 import com.dms.hospitalService.hospital.dto.request.InventoryUpdateRequest;
+import com.dms.hospitalService.hospital.dto.response.HospitalResponse;
 import com.dms.hospitalService.hospital.dto.response.InventoryResponse;
+import com.dms.hospitalService.hospital.service.HospitalService;
 import com.dms.hospitalService.hospital.service.InventoryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -20,13 +22,14 @@ import java.util.UUID;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final HospitalService hospitalService;
 
     @PostMapping("/{hospitalId}/inventory")
     public ResponseEntity<InventoryResponse> initializeInventory(
             HttpServletRequest httpRequest,
             @PathVariable UUID hospitalId,
             @Valid @RequestBody InventoryCreateRequest request) {
-        if (!canManageHospital(httpRequest.getHeader("X-User-Role"))) {
+        if (!canManageHospital(httpRequest, hospitalId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return new ResponseEntity<>(inventoryService.initializeInventory(hospitalId, request), HttpStatus.CREATED);
@@ -37,7 +40,7 @@ public class InventoryController {
             HttpServletRequest httpRequest,
             @PathVariable UUID hospitalId,
             @Valid @RequestBody InventoryUpdateRequest request) {
-        if (!canManageHospital(httpRequest.getHeader("X-User-Role"))) {
+        if (!canManageHospital(httpRequest, hospitalId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return ResponseEntity.ok(inventoryService.updateInventoryQuantity(hospitalId, request));
@@ -48,7 +51,7 @@ public class InventoryController {
             HttpServletRequest httpRequest,
             @PathVariable UUID hospitalId,
             @Valid @RequestBody List<InventoryUpdateRequest> updates) {
-        if (!canManageHospital(httpRequest.getHeader("X-User-Role"))) {
+        if (!canManageHospital(httpRequest, hospitalId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return ResponseEntity.ok(inventoryService.batchUpdateInventory(hospitalId, updates));
@@ -69,17 +72,51 @@ public class InventoryController {
     public ResponseEntity<Void> deleteInventoryItem(
             HttpServletRequest httpRequest,
             @PathVariable UUID id) {
-        if (!canManageHospital(httpRequest.getHeader("X-User-Role"))) {
+        UUID hospitalId = inventoryService.getHospitalIdForInventoryItem(id);
+        if (hospitalId == null || !canManageHospital(httpRequest, hospitalId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         inventoryService.deleteInventoryItem(id);
         return ResponseEntity.noContent().build();
     }
 
-    private boolean canManageHospital(String role) {
-        return "GOVERNMENT_OFFICIAL".equals(role)
-                || "DISTRICT_ADMIN".equals(role)
-                || "SUPER_ADMIN".equals(role)
-                || "HOSPITAL".equals(role);
+    private boolean isAuthorizedHospitalAdmin(HttpServletRequest request) {
+        String role = request.getHeader("X-User-Role");
+        if ("SUPER_ADMIN".equals(role) || "DISTRICT_ADMIN".equals(role)) {
+            return true;
+        }
+        if ("GOVERNMENT_OFFICIAL".equals(role)) {
+            String deptCategory = request.getHeader("X-User-Department-Category");
+            return "MEDICAL_RESPONSE".equals(deptCategory);
+        }
+        return false;
+    }
+
+    private boolean canManageHospital(HttpServletRequest request, UUID hospitalId) {
+        if (isAuthorizedHospitalAdmin(request)) {
+            return true;
+        }
+        String role = request.getHeader("X-User-Role");
+        if ("HOSPITAL".equals(role)) {
+            UUID actorId = extractUserId(request);
+            if (actorId == null) return false;
+            try {
+                HospitalResponse h = hospitalService.getHospitalById(hospitalId);
+                return h.getAdminUserId() != null && h.getAdminUserId().equals(actorId);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private UUID extractUserId(HttpServletRequest request) {
+        String idHeader = request.getHeader("X-User-Id");
+        if (idHeader != null && !idHeader.isBlank()) {
+            try {
+                return UUID.fromString(idHeader);
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 }

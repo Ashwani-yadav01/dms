@@ -384,16 +384,264 @@ DMS is an enterprise-grade disaster coordination platform consisting of a Spring
   - Frontend production build (`npm run build`) passed with exit code 0 (1682 modules transformed, zero bundling errors).
 - **Result**: PASSED.
 
+### Task 16: DMS Critical Fixes & Complete UI Improvement (Photo Upload, On-Behalf Reporting, Role-Separated Profiles & Brand Navigation)
+- **Problem**:
+  1. PostgreSQL schema validation error `42703` (`column i1_0.is_reporting_on_behalf does not exist`) in Incident Service due to entity mapping outpacing Flyway migrations.
+  2. Basic/unattractive photo selection in incident reporting with no drag-and-drop, no thumbnail preview, no per-file removal, and no size/format validation.
+  3. "Reporting on behalf" vs "Reporting for yourself" lacked clear structured modes, causing inconsistent coordinate entry and telemetry confusion.
+  4. Citizen Profile incorrectly showed "Officer Profile" under "Governance" in the navbar and displayed officer fields indiscriminately.
+  5. UI navigation and operational views lacked executive brand styling and responsive role-tailored presentation.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Backend Database**:
+    - Created `incident/src/main/resources/db/migration/V3__add_is_reporting_on_behalf.sql` adding `is_reporting_on_behalf BOOLEAN NOT NULL DEFAULT FALSE` to `tbl_incidents`.
+    - Created `user/src/main/resources/db/migration/V5__update_user_role_check_constraint.sql` adding `HOSPITAL` to `users_role_check`.
+    - Updated unit & integration test suites in `incident-service` to assert schema queries and authorization rules.
+  - **Frontend UI & Components**:
+    - Created `dmsFrontend/src/components/PhotoUpload.jsx` supporting drag-and-drop, thumbnail previews, stop-propagation removal, file validation (JPEG/PNG/WebP, <= 10MB), mobile-friendly picker, and animated upload progress.
+    - Redesigned `dmsFrontend/src/pages/ReportIncident.jsx` with an intuitive 2-card mode selector ("I Am at the Scene" with GPS picker vs "Reporting on Behalf of Someone Else" with remote coordinates and silent anti-spoofing telemetry capture), offline queue fallback, and integrated `PhotoUpload`.
+    - Redesigned `dmsFrontend/src/pages/Profile.jsx` with role-aware separation:
+      - `CITIZEN`: Demographics, legal name, residential address, emergency coordinates. Completely omits official credentials and authorization codes.
+      - `GOVERNMENT_OFFICIAL`: Department name, category, designation, employee ID, hierarchy, duty radius, and verification badge.
+      - Specialized role views for `VOLUNTEER`, `NGO`, and `RESCUE_TEAM`.
+      - Integrated `PhotoUpload` for profile photos.
+    - Redesigned `dmsFrontend/src/components/AppShell.jsx` with role-tailored navigation ("My Profile" under Citizen Resilience for Citizens; "Officer Profile" under Governance for Officials), role-aware user name without default "Operations Officer" fallback, mobile drawer menu, and active route indicators.
+    - Redesigned `dmsFrontend/src/pages/Dashboard.jsx` with role-adaptive greetings, metrics, and eyebrow banners.
+    - Updated `dmsFrontend/src/pages/Incidents.jsx` using `PhotoUpload` for incident resolution evidence.
+    - Aligned `dmsFrontend/src/styles/global.css` with the executive brand palette (`#101828`, `#173B73`, `#2563EB`, `#0D9488`, `#22D3EE`, `#FFFFFF`, `#DC2626`).
+- **Files changed**:
+  - `incident/src/main/resources/db/migration/V3__add_is_reporting_on_behalf.sql`
+  - `user/src/main/resources/db/migration/V5__update_user_role_check_constraint.sql`
+  - `incident/src/test/java/com/dms/incident/IncidentApplicationTests.java`
+  - `incident/src/test/java/com/dms/incident/service/IncidentAuthorizationServiceTest.java`
+  - `dmsFrontend/src/components/PhotoUpload.jsx`
+  - `dmsFrontend/src/pages/ReportIncident.jsx`
+  - `dmsFrontend/src/pages/Profile.jsx`
+  - `dmsFrontend/src/components/AppShell.jsx`
+  - `dmsFrontend/src/pages/Dashboard.jsx`
+  - `dmsFrontend/src/pages/Incidents.jsx`
+  - `dmsFrontend/src/styles/global.css`
+- **Testing performed**:
+  - Backend Maven tests: `mvn test -f incident/pom.xml` -> **BUILD SUCCESS** (8 tests passed, 0 failures, 0 errors).
+  - Backend Maven tests: `mvn test -f user/pom.xml` -> **BUILD SUCCESS** (8 tests passed, 0 failures, 0 errors).
+  - Frontend production build: `npm run build` in `dmsFrontend` -> **BUILD SUCCESS** (1683 modules transformed, 0 errors, output in `dist/`).
+  - Database schema verified: `tbl_incidents.is_reporting_on_behalf` column physically confirmed in PostgreSQL.
+- **Result**: PASSED.
+
+### Task 17: Security Hardening, Anti-Spoofing & Comprehensive Role Authorization Across Microservices Mesh
+- **Problem**:
+  1. API Gateway blindly forwarded untrusted incoming `X-User-Id`, `X-User-Role`, and `X-User-Email` headers when routing to microservices, allowing malicious clients to impersonate any user or role by forging request headers.
+  2. `user-service`: `UserController` endpoints allowed unauthenticated or unauthorized users to enumerate all system users (`GET /`), query users by mobile number (`GET /mobile`), fetch arbitrary user profiles (`GET /{userId}`), delete arbitrary accounts (`DELETE /{userId}`), and dump resident emails (`GET /nearby/emails`).
+  3. `user-service`: `SafetyCheckInController`, `SosAlertController`, and `TrustedContactController` contained an unsafe header fallback (`if (forwardedUserId != null) return forwardedUserId;`) that bypassed the authenticated principal.
+  4. `user-service`: `GovernmentOfficialController` and `RescueTeamAdminController` excluded `SUPER_ADMIN` from administrative management endpoints.
+  5. `hospital-service`: `InventoryController`, `HospitalInventoryController`, and `PatientAdmissionController` lacked multi-tenant ownership checks, permitting any authenticated hospital administrator to modify inventories, declare shortages, admit patients, or discharge patients at other hospitals.
+  6. `hospital-service`: `DELETE /api/v1/hospitals/{id}` was exposed without administrative role restrictions.
+  7. `logistics-service`: `LogisticsController` lacked role restrictions on warehouse creation (`POST /warehouses`), batch restock (`POST /inventory/batch`), vehicle registration (`POST /vehicles`), and delivery confirmations (`PATCH /dispatches/{id}/deliver`).
+  8. `rescue-service`: `RescueAuthorizationService` omitted `SUPER_ADMIN` from dispatcher, mission view, and department view permissions. Mission cancellation in `RescueMissionServiceImpl` barred dispatchers from revoking or cancelling assignments.
+  9. `notification-service`: `POST /api/v1/notifications/test-email` was exposed to all callers without role validation, allowing unauthorized mass email broadcast triggers.
+  10. `dmsFrontend`: `roles.js` contained an invalid `POLICE` role in `ROLES`, `SENSITIVE_ROLES`, and `ROLE_LABELS` that was not defined in the backend `UserRole` enum.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **API Gateway**:
+    - Created `GlobalHeaderSanitizerFilter.java` with `Ordered.HIGHEST_PRECEDENCE` (-100) stripping `X-User-Id`, `X-User-Role`, and `X-User-Email` from inbound client requests before routing.
+  - **User Service**:
+    - Restricted `GET /api/v1/users` and `GET /api/v1/users/mobile` to `SUPER_ADMIN` and `DISTRICT_ADMIN`.
+    - Restricted `GET /api/v1/users/{userId}` and `GET /api/v1/users/email` to account owner, `SUPER_ADMIN`, or `DISTRICT_ADMIN`.
+    - Restricted `DELETE /api/v1/users/{userId}` strictly to `SUPER_ADMIN`.
+    - Restricted `GET /api/v1/users/nearby/emails` to authorized operators (`SUPER_ADMIN`, `DISTRICT_ADMIN`, `GOVERNMENT_OFFICIAL`, `RESCUE_TEAM`).
+    - Added `SUPER_ADMIN` to `requireAdmin` in `GovernmentOfficialController.java` and `RescueTeamAdminController.java`.
+    - Removed unsafe `forwardedUserId` fallback in `SafetyCheckInController.java`, `SosAlertController.java`, and `TrustedContactController.java`.
+  - **Hospital Service**:
+    - Added `getHospitalIdForInventoryItem` in `InventoryService` and `InventoryServiceImpl`.
+    - Added `getHospitalIdForAdmission` in `PatientAdmissionService` and `PatientAdmissionServiceImpl`.
+    - Enforced hospital ownership checks (`adminUserId == actorId`) in `InventoryController.java` (`initializeInventory`, `updateInventory`, `batchUpdateInventory`, `deleteInventoryItem`) and `HospitalInventoryController.java` (`declareShortage`).
+    - Enforced `canManageHospital` on patient admission and discharge in `PatientAdmissionController.java`.
+    - Restricted `DELETE /api/v1/hospitals/{id}` to `SUPER_ADMIN` and `DISTRICT_ADMIN` in `HospitalController.java`.
+  - **Logistics Service**:
+    - Enforced role checks (`DISTRICT_ADMIN`, `SUPER_ADMIN`, `GOVERNMENT_OFFICIAL`, `NGO`) on `createWarehouse`, `addBatch`, `registerVehicle`, and `markDelivered` in `LogisticsController.java`.
+    - Restricted `getDispatchesForHospital` to authorized logistics or hospital roles.
+  - **Rescue Service**:
+    - Added `SUPER_ADMIN` support to `requireDispatcher()`, `requireMissionView()`, and `requireDepartmentView()` in `RescueAuthorizationService.java`.
+    - Added `requireAssignedTeamOrDispatcher()` to allow dispatchers or assigned teams to cancel missions in `RescueMissionServiceImpl.java`.
+  - **Notification Service**:
+    - Restricted `POST /api/v1/notifications/test-email` to `SUPER_ADMIN` and `DISTRICT_ADMIN` with 403 Forbidden check in `NotificationController.java`.
+  - **Frontend**:
+    - Removed unsupported `POLICE` role from `ROLES`, `SENSITIVE_ROLES`, and `ROLE_LABELS` in `dmsFrontend/src/auth/roles.js`.
+- **Files changed**:
+  - `api-gateway/src/main/java/com/dms/gateway/filter/GlobalHeaderSanitizerFilter.java` (created)
+  - `user/src/main/java/com/dms/userService/user/controller/UserController.java`
+  - `user/src/main/java/com/dms/userService/user/controller/GovernmentOfficialController.java`
+  - `user/src/main/java/com/dms/userService/user/controller/RescueTeamAdminController.java`
+  - `user/src/main/java/com/dms/userService/user/controller/SafetyCheckInController.java`
+  - `user/src/main/java/com/dms/userService/user/controller/SosAlertController.java`
+  - `user/src/main/java/com/dms/userService/user/controller/TrustedContactController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/InventoryService.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/impl/InventoryServiceImpl.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/PatientAdmissionService.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/impl/PatientAdmissionServiceImpl.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/HospitalController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/InventoryController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/HospitalInventoryController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/PatientAdmissionController.java`
+  - `logistics/src/main/java/com/dms/logisticsService/logistics/controller/LogisticsController.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/security/RescueAuthorizationService.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/service/impl/RescueMissionServiceImpl.java`
+  - `notification/src/main/java/com/dms/notificationService/controller/NotificationController.java`
+  - `dmsFrontend/src/auth/roles.js`
+- **Testing performed**:
+  - `api-gateway`: `mvn test` -> **BUILD SUCCESS** (1 test passed).
+  - `user-service`: `mvn test` -> **BUILD SUCCESS** (8 tests passed).
+  - `rescue-service`: `mvn test` -> **BUILD SUCCESS** (3 tests passed).
+  - `hospital-service`: `mvn test` -> **BUILD SUCCESS** (1 test passed).
+  - `logistics-service`: `mvn test` -> **BUILD SUCCESS** (1 test passed).
+  - `notification-service`: `mvn test` -> **BUILD SUCCESS** (1 test passed).
+  - `incident-service`: `mvn test` -> **BUILD SUCCESS** (8 tests passed).
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,683 modules transformed, 0 errors).
+- **Result**: PASSED.
+
+---
+
+### Task 18: Department-Based Authorization, Hospital Management Restrictions & Incident Verification Scoping (Approach 1)
+- **Problem**:
+  1. Government officials held generic permissions across unrelated departments (e.g. Fire/Disaster officials being able to manage hospital admissions/beds/inventory, and verify flood/fire incidents outside their department jurisdiction without scoping).
+  2. The incident reporting and verification workflow did not restrict verification authority to the official's authorized department category.
+  3. Under Approach 1, Flood response belongs to the Disaster Management Department (`DISASTER_RESCUE`).
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **User Service (`user`)**:
+    - Added `departmentCategory` and `departmentName` claims to JWT payload during authentication in `AuthServiceImpl.java`.
+  - **API Gateway (`api-gateway`)**:
+    - Configured `GlobalHeaderSanitizerFilter.java` to strip client-supplied `X-User-Department-Category` and `X-User-Department-Name` headers at the perimeter.
+    - Updated `AuthenticationFilter.java` to extract verified JWT `departmentCategory` and `departmentName` claims and forward them as trusted downstream headers.
+  - **Hospital Service (`hospital`)**:
+    - Replaced generic `isAdminRole` with `isAuthorizedHospitalAdmin(request)` across `HospitalController.java`, `InventoryController.java`, `HospitalInventoryController.java`, and `PatientAdmissionController.java`.
+    - Only `SUPER_ADMIN`, `DISTRICT_ADMIN`, assigned `HOSPITAL` accounts, or `GOVERNMENT_OFFICIAL` with `departmentCategory == "MEDICAL_RESPONSE"` are authorized to mutate hospitals, beds, admissions, discharges, shortages, and inventory items. Unrelated officials receive HTTP 403 Forbidden.
+  - **Incident Service (`incident`)**:
+    - Created `IncidentDepartmentPolicy.java` defining department-to-incident mappings with Approach 1 (`FLOOD -> DISASTER_RESCUE`, `FIRE -> FIRE_SAFETY`, `COLLAPSE -> DISASTER_RESCUE/INFRASTRUCTURE_REPAIR/FIRE_SAFETY`, `MEDICAL -> MEDICAL_RESPONSE`, `HAZMAT -> FIRE_SAFETY/DISASTER_RESCUE`, `OTHER -> DISASTER_RESCUE/REVENUE_RELIEF/OTHER`).
+    - Enforced department authorization in `IncidentAuthorizationService.java` for `VERIFY` and `REJECT` actions (`isOfficialAuthorizedForIncidentType`).
+    - Made `officialDutyArea()` public on `IncidentAuthorizationService`.
+    - Extended `IncidentRepository.java` with `findWithinDutyAreaAndTypes` Haversine spatial bounding query filtering by `Collection<IncidentType> types`.
+    - Updated `IncidentServiceImpl.java` `filterIncidents` to scope government official query results to authorized department types within their duty area, and enabled admin filtering for `DISTRICT_ADMIN` and `SUPER_ADMIN`.
+    - Added comprehensive unit tests in `IncidentAuthorizationServiceTest.java`.
+  - **Frontend (`dmsFrontend`)**:
+    - `src/auth/session.js`: Extracted `departmentCategory` and `departmentName` into auth session.
+    - `src/auth/roles.js`: Updated `canManageHospitalFacility` to require `MEDICAL_RESPONSE` for government officials, and added `canVerifyIncidentType`.
+    - `src/auth/ProtectedRoute.jsx`: Added support for `allow` custom predicate.
+    - `src/App.jsx`: Guarded `/admin/hospitals` and `/hospital-inventory` routes using `canManageHospitalFacility(user?.role, user?.departmentCategory)`.
+    - `src/components/AppShell.jsx`: Filtered `/admin/hospitals` ("Facility Management") in navigation sidebar based on `canManageHospitalFacility`.
+    - `src/pages/Hospitals.jsx`: Scoped bed update and admission controls so non-medical officials have read-only view.
+    - `src/pages/Incidents.jsx`: Scoped incident table row actions: displays "Outside department jurisdiction" if incident type doesn't match official's department, "Outside your duty area" if outside geographic radius, and active Verify/Reject buttons only when both department and duty area checks pass.
+- **Files changed**:
+  - `user/src/main/java/com/dms/userService/user/service/impl/AuthServiceImpl.java`
+  - `api-gateway/src/main/java/com/dms/gateway/filter/AuthenticationFilter.java`
+  - `api-gateway/src/main/java/com/dms/gateway/filter/GlobalHeaderSanitizerFilter.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/HospitalController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/InventoryController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/HospitalInventoryController.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/PatientAdmissionController.java`
+  - `incident/src/main/java/com/dms/incident/service/IncidentDepartmentPolicy.java` (created)
+  - `incident/src/main/java/com/dms/incident/service/IncidentAuthorizationService.java`
+  - `incident/src/main/java/com/dms/incident/repository/IncidentRepository.java`
+  - `incident/src/main/java/com/dms/incident/service/IncidentServiceImpl.java`
+  - `incident/src/test/java/com/dms/incident/service/IncidentAuthorizationServiceTest.java`
+  - `dmsFrontend/src/auth/session.js`
+  - `dmsFrontend/src/auth/roles.js`
+  - `dmsFrontend/src/auth/ProtectedRoute.jsx`
+  - `dmsFrontend/src/App.jsx`
+  - `dmsFrontend/src/components/AppShell.jsx`
+  - `dmsFrontend/src/pages/Hospitals.jsx`
+  - `dmsFrontend/src/pages/Incidents.jsx`
+- **Testing performed**:
+  - `incident`: `mvn test -Dtest=IncidentAuthorizationServiceTest` -> **BUILD SUCCESS** (12 tests passed).
+  - `api-gateway`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `user`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `hospital`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `incident`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,683 modules transformed, 0 errors).
+- **Result**: PASSED.
+
+### Task 19: Complete Navbar & Profile Experience Redesign with Expanded Vibrant Design System
+- **Problem**:
+  1. The top navigation bar and user profile controls were basic, lacked visual hierarchy, and had no popover dropdown (clicking the profile trigger navigated immediately to `/profile`).
+  2. Mobile navigation had clipping and overflow issues on small viewport widths (down to 320px).
+  3. Profile page (`Profile.jsx`) was an unorganized, flat collection of inputs without visual polish, hero headers, verification badges, or clear role-appropriate tabbed navigation.
+  4. The platform needed a rich, colorful visual identity across roles, operational statuses, and navigation groups, expanding beyond plain blues to include electric blues, royal indigo, emerald greens, teals, cyans, ambers, purples, and rose red accents.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **`ProfileDropdown.jsx` (New Component)**:
+    - Created a polished popover menu anchored to the topbar avatar trigger with outside-click and Escape key dismissal.
+    - Role-aware header banner displaying user initials, full name, role badge, government verification badge, department category, and active status.
+    - Grouped navigation actions: "Account & Identity" (My Profile / Officer Profile, Personal Safety & SOS, Crisis Helplines) and "Operations & Workspace" (Incident Reporting, Preparedness Checklist, Rescue Operations, Hospital Administration, Logistics, Rescue Admin).
+    - Prominent session sign-out button with clean state reset.
+  - **`AppShell.jsx` (Navigation & Shell Overhaul)**:
+    - Upgraded top navigation bar with breadcrumb tracking (`Citizen Resilience` vs `Crisis Operations` / `[Page Name]`), real-time live telemetry pill (`Live Mesh`), quick emergency actions (`I'm Safe`, `SOS Alert`), and emergency notifications bell with ping indicator.
+    - Embedded `ProfileDropdown` into topbar, replacing the old static profile chip.
+    - Mobile slide-out drawer featuring a dedicated user identity card with role and department metadata, categorized nav links with colored icon wrappers (`.icon-blue`, `.icon-rose`, `.icon-amber`, `.icon-emerald`, `.icon-purple`, etc.), and active navigation pills.
+    - Added high-availability telemetry readiness indicator in the sidebar footer.
+  - **`Profile.jsx` (Complete Profile Experience Redesign)**:
+    - Designed a vibrant hero card with role-themed gradient banner, stylized user avatar (with Cloudinary photo display or initials), verification checkmark, role badge, department badge, and quick action buttons.
+    - Implemented clean tabbed view architecture:
+      - *Tab 1: Contact & Coordinates* — residential/station address, city, state, district, pincode, and live GPS coordinates.
+      - *Tab 2: Role Credentials & Specialization* — strictly role-separated (Citizens see demographics/helplines; Officials see department, designation, employee ID, hierarchy, duty radius, and verification; Volunteers see skills & availability; NGOs see registry info; Rescue see tactical unit details).
+      - *Tab 3: Account & System Security* — email, account authority, JWT session status, and gateway perimeter status.
+    - Streamlined edit mode with grouped form cards, integrated `PhotoUpload` for profile photos, and interactive `LocationPicker` for coordinates.
+    - Non-field administrative roles (`DISTRICT_ADMIN`, `SUPER_ADMIN`) display tailored governance summaries.
+  - **`global.css` (Expanded Color Palette & Component Styling)**:
+    - Added 21 expanded color tokens to `:root` including Electric Blue (`#2563EB`), Royal Blue (`#4F46E5`), Violet (`#7C3AED`), Purple (`#9333EA`), Teal (`#0D9488`), Bright Cyan (`#06B6D4`), Sky Blue (`#38BDF8`), Emerald (`#10B981`), Lime (`#84CC16`), Amber (`#F59E0B`), Orange (`#F97316`), Coral (`#FB7185`), Pink (`#EC4899`), Rose Red (`#E11D48`), Midnight Navy (`#101828`), and soft pastel tints.
+    - Added comprehensive styling for topbar, breadcrumbs, profile trigger button, popover dropdown, tabs, cards, skills pills, and edit forms.
+    - Added responsive media queries supporting viewports down to 320px (converting popovers to fixed full-width responsive overlays and adapting grid cards to single column).
+- **Files changed**:
+  - `dmsFrontend/src/components/ProfileDropdown.jsx` (created)
+  - `dmsFrontend/src/components/AppShell.jsx`
+  - `dmsFrontend/src/pages/Profile.jsx`
+  - `dmsFrontend/src/styles/global.css`
+- **Testing performed**:
+  - Frontend production build (`npm run build` in `dmsFrontend`): Passed with exit code 0 (`1684 modules transformed`, `dist/` bundled cleanly in 4.36s, zero syntax or lint errors).
+  - Responsive layout verified across desktop, tablet, and mobile breakpoints (640px, 430px, 390px, 375px, 320px).
+- **Result**: PASSED.
+
+### Task 20: DMS Public Landing Page Navbar: Complete Premium Redesign
+- **Problem**:
+  1. The public landing page navbar was basic, unattractive, and lacked visual hierarchy, polish, or brand identity.
+  2. Mobile responsiveness was completely broken: `.landing-nav > nav` was set to `display: none` below 640px with no hamburger button or mobile drawer, leaving navigation links completely inaccessible to mobile users.
+  3. Action buttons had cramped layouts and did not differentiate authenticated responders/citizens from anonymous visitors effectively (lacked user identity chip, avatar, or role badge).
+  4. Lacked sticky positioning, backdrop blur, brand accent detail, and smooth interactive transitions.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **`LandingNavbar.jsx` (New Component)**:
+    - Created a dedicated, modular landing page navigation component with sticky positioning, backdrop blur (`rgba(255, 255, 255, 0.94)`, `backdrop-filter: blur(16px)`), and dynamic scroll elevation.
+    - Designed an executive top brand accent strip (`#2563EB` -> `#4F46E5` -> `#7C3AED` -> `#0D9488` -> `#06B6D4` -> `#10B981`).
+    - Engineered a distinctive brand mark featuring an emergency shield in a 3-stop gradient with radial shine, bold typography (`DMS COMMAND`), subtitle (`DISASTER MANAGEMENT SYSTEM`), and live mesh telemetry status pill.
+    - Desktop navigation links with category-colored icon boxes (`.icon-rose` for Portals, `.icon-cyan` for Architecture, `.icon-purple` for Protocol, `.icon-amber` for Helplines, `.icon-emerald` for Checklist, `.icon-teal` for Hospitals) with smooth hover transitions.
+    - Prominent primary CTA ("Report Incident") styled in a high-visibility rose/red emergency gradient with subtle glow.
+    - Differentiated guest actions (clean "Sign In" button and electric-to-indigo "Register" button).
+    - Authenticated user state featuring "Command Center" dashboard shortcut, role-specific gradient avatar initials, full name, role badge, and quick sign out.
+    - Full-featured mobile drawer menu with smooth cubic-bezier animation, user/guest header cards, emergency priority banner, categorized navigation with colored icons, stacked footer buttons, backdrop scrim, keyboard `Escape` dismissal, and body scroll lock.
+  - **`Landing.jsx`**:
+    - Replaced old static `<header className="landing-nav">` with the new `<LandingNavbar />` component.
+  - **`global.css`**:
+    - Replaced old `.landing-nav` rules with complete CSS for `.landing-navbar-wrapper`, brand marks, telemetry badges, desktop link pills, action buttons, mobile toggle, drawer overlay, and animations (`livePulse`, `drawerSlideDown`).
+    - Added responsive media queries for 1080px, 900px, 640px, 430px, and 360px ensuring zero overflow down to 320px viewport widths.
+- **Files changed**:
+  - `dmsFrontend/src/components/LandingNavbar.jsx` (created)
+  - `dmsFrontend/src/pages/Landing.jsx`
+  - `dmsFrontend/src/styles/global.css`
+- **Testing performed**:
+  - Frontend production build (`npm run build` in `dmsFrontend`): Passed with exit code 0 (`1685 modules transformed`, `dist/` bundled cleanly in 4.54s, zero syntax or lint errors).
+  - Responsive layout verified across desktop (1400px, 1280px, 1080px), tablet (900px, 768px), and mobile breakpoints (640px, 430px, 390px, 375px, 320px).
+- **Result**: PASSED.
+
 ---
 
 ## Remaining Work & Status
-- **Current Status**: All Hospital/Location/Trust Phases (Problems 1–24), Offline Citizen Resilience Features, and Personal Safety ("I'm Safe" & SOS Quick Alert) are FULLY IMPLEMENTED and TESTED!
-  - Phase 1: Hospital Location Foundation (Problems 1–3) — **IMPLEMENTED & TESTED**
-  - Phase 2: Nearby-Care Reliability, Location Selection & Offline Access (Problems 4–8) — **IMPLEMENTED & TESTED**
-  - Phase 4: Bed Availability & Emergency Status Freshness (Problems 13–16) — **IMPLEMENTED & TESTED**
-  - Phase 3: Hospital Inventory & Supplies (Problems 9–12) — **IMPLEMENTED & TESTED**
-  - Phase 5: Location Verification & Fraud Prevention (Problems 17–20) — **IMPLEMENTED & TESTED**
-  - Phase 6: Governance, Role Scoping, Audit & Verification History (Problems 21–24) — **IMPLEMENTED & TESTED**
-  - Task 14: Offline Incident Reporting, Safe Sync, Helplines & Checklists — **IMPLEMENTED & TESTED**
-  - Task 15: Personal Safety, Family Check-In ("I'm Safe") & SOS Quick Alert — **IMPLEMENTED & TESTED**
+- **Current Status**: All Microservices, Gateway Security, Department Authorization, and Frontend Role Alignments are FULLY IMPLEMENTED and TESTED!
+  - Task 16: Photo Upload, On-Behalf Reporting, Role-Separated Profiles & Brand Navigation — **IMPLEMENTED & TESTED**
+  - Task 17: Security Hardening, Anti-Spoofing & Comprehensive Role Authorization Across Microservices Mesh — **IMPLEMENTED & TESTED**
+  - Task 18: Department-Based Authorization, Hospital Management Restrictions & Incident Verification Scoping (Approach 1) — **IMPLEMENTED & TESTED**
+  - Task 19: Complete Navbar & Profile Experience Redesign with Expanded Vibrant Design System — **IMPLEMENTED & TESTED**
+  - Task 20: DMS Public Landing Page Navbar: Complete Premium Redesign — **IMPLEMENTED & TESTED**
+
+
+
+
 

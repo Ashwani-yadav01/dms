@@ -50,7 +50,6 @@ public class SosAlertController {
 
     private UUID resolveUserId(UUID forwardedUserId, String authorization) {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
-            if (forwardedUserId != null) return forwardedUserId;
             throw new AccessDeniedException("Authorization required.");
         }
         try {
@@ -64,7 +63,6 @@ public class SosAlertController {
         } catch (AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
-            if (forwardedUserId != null) return forwardedUserId;
             throw new AccessDeniedException("Invalid authentication credentials.");
         }
     }

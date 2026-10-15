@@ -35,29 +35,65 @@ public class LogisticsController {
     }
 
     @GetMapping("/dispatches/hospital/{hospitalId}")
-    public ResponseEntity<List<DispatchOrder>> getDispatchesForHospital(@PathVariable UUID hospitalId) {
+    public ResponseEntity<List<DispatchOrder>> getDispatchesForHospital(
+            @PathVariable UUID hospitalId,
+            @RequestHeader(value = "X-User-Role", required = false) String role) {
+        if (!canViewHospitalDispatches(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(dispatchOrderRepository.findByTargetHospitalId(hospitalId));
     }
 
     // --- SEED / INGESTION ENDPOINTS ---
     @PostMapping("/warehouses")
-    public ResponseEntity<Warehouse> createWarehouse(@Valid @RequestBody WarehouseCreateRequest request) {
+    public ResponseEntity<Warehouse> createWarehouse(
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @Valid @RequestBody WarehouseCreateRequest request) {
+        if (!canManageLogistics(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return new ResponseEntity<>(managementService.createWarehouse(request), HttpStatus.CREATED);
     }
 
     @PostMapping("/inventory/batches")
-    public ResponseEntity<InventoryBatch> addBatch(@Valid @RequestBody InventoryBatchCreateRequest request) {
+    public ResponseEntity<InventoryBatch> addBatch(
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @Valid @RequestBody InventoryBatchCreateRequest request) {
+        if (!canManageLogistics(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return new ResponseEntity<>(managementService.addInventoryBatch(request), HttpStatus.CREATED);
     }
 
     @PostMapping("/vehicles")
-    public ResponseEntity<TransportVehicle> registerVehicle(@Valid @RequestBody TransportVehicleCreateRequest request) {
+    public ResponseEntity<TransportVehicle> registerVehicle(
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @Valid @RequestBody TransportVehicleCreateRequest request) {
+        if (!canManageLogistics(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return new ResponseEntity<>(managementService.registerVehicle(request), HttpStatus.CREATED);
     }
 
     // --- DELIVERY COMPLETION ---
     @PatchMapping("/dispatches/{orderId}/delivered")
-    public ResponseEntity<DispatchOrder> markDelivered(@PathVariable UUID orderId) {
+    public ResponseEntity<DispatchOrder> markDelivered(
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @PathVariable UUID orderId) {
+        if (!canManageLogistics(role)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(managementService.markOrderAsDelivered(orderId));
+    }
+
+    private boolean canManageLogistics(String role) {
+        return "DISTRICT_ADMIN".equals(role)
+                || "SUPER_ADMIN".equals(role)
+                || "GOVERNMENT_OFFICIAL".equals(role)
+                || "NGO".equals(role);
+    }
+
+    private boolean canViewHospitalDispatches(String role) {
+        return canManageLogistics(role) || "HOSPITAL".equals(role);
     }
 }

@@ -35,7 +35,7 @@ public class HospitalController {
             HttpServletRequest request,
             @Valid @RequestBody HospitalCreateRequest hospitalRequest) {
         String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role) && !"HOSPITAL".equals(role)) {
+        if (!isAuthorizedHospitalAdmin(request) && !"HOSPITAL".equals(role)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         UUID actorId = extractUserId(request);
@@ -98,13 +98,16 @@ public class HospitalController {
         return ResponseEntity.ok(hospitalService.searchHospitalsByName(name, pageable));
     }
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteHospital(@PathVariable UUID id) {
+    public ResponseEntity<Void> deleteHospital(HttpServletRequest request, @PathVariable UUID id) {
+        if (!isAuthorizedHospitalAdmin(request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         hospitalService.deleteHospital(id);
         return ResponseEntity.noContent().build();
     }
 
     // ========== ADMIN ENDPOINTS ==========
-    // These require GOVERNMENT_OFFICIAL or DISTRICT_ADMIN role (validated via X-User-Role header)
+    // These require MEDICAL_RESPONSE official, DISTRICT_ADMIN, or SUPER_ADMIN
 
     @GetMapping("/admin")
     public ResponseEntity<Page<HospitalResponse>> listHospitals(
@@ -115,8 +118,7 @@ public class HospitalController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!isAuthorizedHospitalAdmin(request)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -133,8 +135,7 @@ public class HospitalController {
             HttpServletRequest request,
             @PathVariable UUID id) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!isAuthorizedHospitalAdmin(request) && !canManageHospital(request, id)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -146,8 +147,7 @@ public class HospitalController {
             HttpServletRequest request,
             @Valid @RequestBody HospitalCreateRequest hospitalRequest) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!isAuthorizedHospitalAdmin(request)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -160,8 +160,7 @@ public class HospitalController {
             @PathVariable UUID id,
             @Valid @RequestBody HospitalUpdateRequest updateRequest) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!canManageHospital(request, id)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -175,11 +174,11 @@ public class HospitalController {
             @RequestParam HospitalStatus status,
             @RequestParam(required = false) String reason) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!canManageHospital(request, id)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
+        String role = request.getHeader("X-User-Role");
         UUID actorId = extractUserId(request);
         return ResponseEntity.ok(hospitalService.changeHospitalStatus(id, status, reason, actorId, role));
     }
@@ -189,11 +188,11 @@ public class HospitalController {
             HttpServletRequest request,
             @PathVariable UUID id) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!isAuthorizedHospitalAdmin(request)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
+        String role = request.getHeader("X-User-Role");
         UUID actorId = extractUserId(request);
         return ResponseEntity.ok(hospitalService.verifyHospital(id, actorId, role));
     }
@@ -204,11 +203,11 @@ public class HospitalController {
             @PathVariable UUID id,
             @RequestParam(defaultValue = "Rejected by authorized official") String reason) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role)) {
+        if (!isAuthorizedHospitalAdmin(request)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
+        String role = request.getHeader("X-User-Role");
         UUID actorId = extractUserId(request);
         return ResponseEntity.ok(hospitalService.rejectHospital(id, reason, actorId, role));
     }
@@ -218,29 +217,36 @@ public class HospitalController {
             HttpServletRequest request,
             @PathVariable UUID id) {
 
-        String role = request.getHeader("X-User-Role");
-        if (!isAdminRole(role) && !canManageHospital(request, id)) {
+        if (!isAuthorizedHospitalAdmin(request) && !canManageHospital(request, id)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         return ResponseEntity.ok(hospitalService.getHospitalAudits(id));
     }
 
-    private boolean isAdminRole(String role) {
-        return "GOVERNMENT_OFFICIAL".equals(role) || "DISTRICT_ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
+    private boolean isAuthorizedHospitalAdmin(HttpServletRequest request) {
+        String role = request.getHeader("X-User-Role");
+        if ("SUPER_ADMIN".equals(role) || "DISTRICT_ADMIN".equals(role)) {
+            return true;
+        }
+        if ("GOVERNMENT_OFFICIAL".equals(role)) {
+            String deptCategory = request.getHeader("X-User-Department-Category");
+            return "MEDICAL_RESPONSE".equals(deptCategory);
+        }
+        return false;
     }
 
     private boolean canManageHospital(HttpServletRequest request, UUID hospitalId) {
-        String role = request.getHeader("X-User-Role");
-        if (isAdminRole(role)) {
+        if (isAuthorizedHospitalAdmin(request)) {
             return true;
         }
+        String role = request.getHeader("X-User-Role");
         if ("HOSPITAL".equals(role)) {
             UUID actorId = extractUserId(request);
             if (actorId == null) return false;
             try {
                 HospitalResponse h = hospitalService.getHospitalById(hospitalId);
-                return h.getAdminUserId() == null || h.getAdminUserId().equals(actorId);
+                return h.getAdminUserId() != null && h.getAdminUserId().equals(actorId);
             } catch (Exception e) {
                 return false;
             }

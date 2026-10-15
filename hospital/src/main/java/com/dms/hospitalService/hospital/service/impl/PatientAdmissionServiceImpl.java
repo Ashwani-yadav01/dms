@@ -102,4 +102,12 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
                 .dischargedAt(a.getDischargedAt())
                 .build();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UUID getHospitalIdForAdmission(UUID admissionId) {
+        return admissionRepository.findById(admissionId)
+                .map(admission -> admission.getHospital().getId())
+                .orElse(null);
+    }
 }

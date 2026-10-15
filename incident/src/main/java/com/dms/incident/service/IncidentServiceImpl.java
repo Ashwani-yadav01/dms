@@ -27,9 +27,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.dms.incident.entity.IncidentType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -188,8 +190,7 @@ public class IncidentServiceImpl implements IncidentService {
             }
             return repository.findByReportedBy(actor, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
         }
-        if ("GOVERNMENT_OFFICIAL".equals(authorization.role())) {
-            authorization.requireVerifiedOfficial();
+        if ("DISTRICT_ADMIN".equals(authorization.role()) || "SUPER_ADMIN".equals(authorization.role())) {
             if (status != null && severity != null)
                 return repository.findByStatusAndSeverity(status, severity, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
             if (status != null)
@@ -197,6 +198,27 @@ public class IncidentServiceImpl implements IncidentService {
             if (severity != null)
                 return repository.findBySeverity(severity, pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
             return repository.findAll(pageable).map(entity -> mapper.map(entity, IncidentResponse.class));
+        }
+        if ("GOVERNMENT_OFFICIAL".equals(authorization.role())) {
+            authorization.requireVerifiedOfficial();
+            IncidentAuthorizationService.DutyArea area = authorization.officialDutyArea();
+            if (area == null) {
+                return Page.empty(pageable);
+            }
+            String deptCategory = authorization.claim("departmentCategory");
+            Set<IncidentType> types = IncidentDepartmentPolicy.getAuthorizedIncidentTypes(deptCategory);
+            if (types == null || types.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            return repository.findWithinDutyAreaAndTypes(
+                    area.latitude(),
+                    area.longitude(),
+                    area.radiusKm(),
+                    types,
+                    status,
+                    severity,
+                    pageable
+            ).map(entity -> mapper.map(entity, IncidentResponse.class));
         }
         if (!"RESCUE_TEAM".equals(authorization.role()))
             throw new IncidentAuthorizationException("You are not authorized to perform this action.");

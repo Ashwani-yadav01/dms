@@ -86,7 +86,7 @@ public class GovernmentOfficialController {
             Role role = userRepository.findById(actorId)
                     .orElseThrow(() -> new UserNotFoundException("User not found"))
                     .getRole();
-            if (role != Role.DISTRICT_ADMIN)
+            if (role != Role.DISTRICT_ADMIN && role != Role.SUPER_ADMIN)
                 throw new AccessDeniedException("You are not authorized to perform this action.");
         } catch (AccessDeniedException | UserNotFoundException e) {
             throw e;

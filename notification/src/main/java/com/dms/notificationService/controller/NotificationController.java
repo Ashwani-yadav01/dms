@@ -24,9 +24,15 @@ public class NotificationController {
 
     @PostMapping("/test-email")
     public ResponseEntity<String> sendTestEmail(
+            @RequestHeader(value = "X-User-Role", required = false) String role,
             @RequestParam String email,
             @RequestParam(defaultValue = "Flash Flood") String disasterType,
             @RequestParam(defaultValue = "Sector 4B") String zone) {
+
+        if (!"SUPER_ADMIN".equals(role) && !"DISTRICT_ADMIN".equals(role)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body("Only administrators can trigger test notification broadcasts");
+        }
 
         dispatchService.dispatchMassEvacuationAlert(
                 List.of(email),

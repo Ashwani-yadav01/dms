@@ -135,6 +135,8 @@ public class AuthServiceImpl implements AuthService {
             extraClaims.put("officialLatitude", profile.getDutyOfficeLatitude());
             extraClaims.put("officialLongitude", profile.getDutyOfficeLongitude());
             extraClaims.put("officialDutyRadiusKm", profile.getDutyRadiusKm());
+            extraClaims.put("departmentCategory", profile.getDepartmentCategory() != null ? profile.getDepartmentCategory().name() : null);
+            extraClaims.put("departmentName", profile.getDepartmentName());
         });
         rescueTeamProfileRepository.findById(user.getId()).ifPresent(profile -> {
             extraClaims.put("rescueVerified", Boolean.TRUE.equals(profile.getIsVerified()));

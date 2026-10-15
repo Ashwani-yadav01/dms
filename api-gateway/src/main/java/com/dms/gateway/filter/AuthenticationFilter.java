@@ -54,15 +54,25 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     String userId = claims.get("userId", String.class);
                     String role = claims.get("role", String.class);
                     String email = claims.getSubject();
+                    String deptCategory = claims.get("departmentCategory", String.class);
+                    String deptName = claims.get("departmentName", String.class);
 
                     ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                             .headers(headers -> {
                                 headers.remove("X-User-Id");
                                 headers.remove("X-User-Role");
                                 headers.remove("X-User-Email");
+                                headers.remove("X-User-Department-Category");
+                                headers.remove("X-User-Department-Name");
                                 headers.set("X-User-Id", userId);
                                 headers.set("X-User-Role", role);
                                 headers.set("X-User-Email", email);
+                                if (deptCategory != null && !deptCategory.isBlank()) {
+                                    headers.set("X-User-Department-Category", deptCategory);
+                                }
+                                if (deptName != null && !deptName.isBlank()) {
+                                    headers.set("X-User-Department-Name", deptName);
+                                }
                             })
                             .build();
 

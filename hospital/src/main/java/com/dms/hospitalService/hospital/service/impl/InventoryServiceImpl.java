@@ -162,6 +162,14 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public UUID getHospitalIdForInventoryItem(UUID id) {
+        return inventoryRepository.findById(id)
+                .map(item -> item.getHospital().getId())
+                .orElse(null);
+    }
+
+    @Override
     @Transactional
     public List<InventoryResponse> batchUpdateInventory(UUID hospitalId, List<InventoryUpdateRequest> requests) {
         Hospital hospital = hospitalRepository.findById(hospitalId)

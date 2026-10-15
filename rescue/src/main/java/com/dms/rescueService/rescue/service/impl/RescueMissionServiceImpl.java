@@ -87,7 +87,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     public RescueMissionResponse cancelMission(UUID missionId, MissionActionRequest request) {
         RescueMission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new RuntimeException("Rescue Mission not found with ID: " + missionId));
-        authorization.requireAssignedTeam(mission);
+        authorization.requireAssignedTeamOrDispatcher(mission);
 
         MissionState currentState = mapStatusToState(mission.getStatus());
         MissionState newState = currentState.cancel(); // Validated via State Pattern

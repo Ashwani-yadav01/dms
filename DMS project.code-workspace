@@ -1,11 +1,13 @@
 {
-	"folders": [
-		{
-			"path": "../dmsFrontend"
-		},
-		{
-			"path": "."
-		}
-	],
-	"settings": {}
+  "folders": [
+    {
+      "path": "../dmsFrontend",
+    },
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    "java.compile.nullAnalysis.mode": "disabled",
+  },
 }

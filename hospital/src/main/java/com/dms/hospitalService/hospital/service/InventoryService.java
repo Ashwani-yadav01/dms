@@ -20,6 +20,8 @@ public interface InventoryService {
 
     void deleteInventoryItem(UUID id);
 
+    UUID getHospitalIdForInventoryItem(UUID id);
+
     void restockItemFromDispatch(UUID hospitalId, String itemType, int quantity);
 
     List<InventoryResponse> batchUpdateInventory(UUID hospitalId, List<InventoryUpdateRequest> requests);

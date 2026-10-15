@@ -11,4 +11,6 @@ public interface PatientAdmissionService {
 
     // Discharges patient and increments bed count
     PatientAdmissionResponse dischargePatient(UUID admissionId);
+
+    UUID getHospitalIdForAdmission(UUID admissionId);
 }

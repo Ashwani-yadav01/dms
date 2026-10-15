@@ -2,6 +2,7 @@ package com.dms.incident.repository;
 
 import com.dms.incident.entity.Incident;
 import com.dms.incident.entity.IncidentStatus;
+import com.dms.incident.entity.IncidentType;
 import com.dms.incident.entity.Severity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
@@ -62,6 +64,38 @@ public interface IncidentRepository extends JpaRepository<Incident, UUID> {
             @Param("lat") Double latitude,
             @Param("lng") Double longitude,
             @Param("radiusInKm") Double radiusInKm,
+            @Param("status") IncidentStatus status,
+            @Param("severity") Severity severity,
+            Pageable pageable
+    );
+
+    @Query(value = """
+        SELECT i FROM Incident i
+        WHERE (:status IS NULL OR i.status = :status)
+          AND (:severity IS NULL OR i.severity = :severity)
+          AND i.incidentType IN :types
+          AND (6371.0 * acos(greatest(-1.0, least(1.0,
+                cos(radians(:lat)) * cos(radians(i.latitude)) *
+                cos(radians(i.longitude) - radians(:lng)) +
+                sin(radians(:lat)) * sin(radians(i.latitude))
+          )))) <= :radiusInKm
+        """,
+        countQuery = """
+        SELECT count(i) FROM Incident i
+        WHERE (:status IS NULL OR i.status = :status)
+          AND (:severity IS NULL OR i.severity = :severity)
+          AND i.incidentType IN :types
+          AND (6371.0 * acos(greatest(-1.0, least(1.0,
+                cos(radians(:lat)) * cos(radians(i.latitude)) *
+                cos(radians(i.longitude) - radians(:lng)) +
+                sin(radians(:lat)) * sin(radians(i.latitude))
+          )))) <= :radiusInKm
+        """)
+    Page<Incident> findWithinDutyAreaAndTypes(
+            @Param("lat") Double latitude,
+            @Param("lng") Double longitude,
+            @Param("radiusInKm") Double radiusInKm,
+            @Param("types") Collection<IncidentType> types,
             @Param("status") IncidentStatus status,
             @Param("severity") Severity severity,
             Pageable pageable

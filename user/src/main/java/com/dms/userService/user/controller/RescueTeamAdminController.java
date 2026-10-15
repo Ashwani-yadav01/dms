@@ -32,7 +32,7 @@ public class RescueTeamAdminController {
     private UUID requireAdmin(String authorization) {
         UUID actorId = actorId(authorization);
         Role role = userRepository.findById(actorId).orElseThrow(() -> new UserNotFoundException("User not found")).getRole();
-        if (role != Role.DISTRICT_ADMIN) throw new AccessDeniedException("You are not authorized to perform this action.");
+        if (role != Role.DISTRICT_ADMIN && role != Role.SUPER_ADMIN) throw new AccessDeniedException("You are not authorized to perform this action.");
         return actorId;
     }
 

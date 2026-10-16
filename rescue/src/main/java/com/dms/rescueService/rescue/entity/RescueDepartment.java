@@ -38,9 +38,14 @@ public class RescueDepartment {
 
     @Column(nullable = false)
     private Double longitude;
-    // Inside RescueDepartment.java
     @Column(name = "station_chief_id")
     private UUID stationChiefId; // Default/Primary Chief ID
+
+    @Column(name = "district_admin_id")
+    private UUID districtAdminId;
+
+    @Column(name = "governing_official_id")
+    private UUID governingOfficialId;
 
     @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
     private List<RescuePersonnel> personnelList = new ArrayList<>();

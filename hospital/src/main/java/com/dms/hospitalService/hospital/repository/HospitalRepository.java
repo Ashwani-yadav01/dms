@@ -37,4 +37,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Page<Hospital> findByStatus(HospitalStatus status, Pageable pageable);
     List<Hospital> findByStatusAndIsAcceptingPatientsTrue(HospitalStatus status);
     Optional<Hospital> findByEmail(String email);
+    Optional<Hospital> findByAdminUserId(UUID adminUserId);
+    boolean existsByAdminUserId(UUID adminUserId);
+    Page<Hospital> findByAdminUserId(UUID adminUserId, Pageable pageable);
 }

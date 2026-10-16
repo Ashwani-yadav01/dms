@@ -30,4 +30,6 @@ public class DepartmentCreateRequest {
     @NotNull(message = "Total capacity is required")
     @Min(value = 1, message = "Capacity must be at least 1")
     private Integer totalCapacity;
+
+    private java.util.UUID governingOfficialId;
 }

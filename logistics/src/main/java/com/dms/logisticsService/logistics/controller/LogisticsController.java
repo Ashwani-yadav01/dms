@@ -80,7 +80,7 @@ public class LogisticsController {
     public ResponseEntity<DispatchOrder> markDelivered(
             @RequestHeader(value = "X-User-Role", required = false) String role,
             @PathVariable UUID orderId) {
-        if (!canManageLogistics(role)) {
+        if (!canManageLogistics(role) && !"HOSPITAL".equals(role)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return ResponseEntity.ok(managementService.markOrderAsDelivered(orderId));

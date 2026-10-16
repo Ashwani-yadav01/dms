@@ -633,13 +633,282 @@ DMS is an enterprise-grade disaster coordination platform consisting of a Spring
 
 ---
 
+### Task 21: Rescue Team District Ownership, Government Official Linkage & Mission Command Integration
+- **Problem**:
+  1. Rescue department stations had no explicit District Admin ownership model (`districtAdminId`), risking cross-district management leaks.
+  2. Government Officials could not be linked as supervisory officers to rescue stations (`governingOfficialId`), preventing them from tracking missions assigned to their linked rescue teams.
+  3. `RescueMissionServiceImpl` inverted latitude and longitude arguments to `RedisGeoService.updateUnitLocation`, breaking Redis GEO proximity calculations.
+  4. `TelemetryService` keyed Redis units with `missionId`, while `RescueAssignmentServiceImpl` keyed them with `departmentId`, resulting in `Double.MAX_VALUE` distance fallbacks.
+  5. The `/rescue` frontend route was blocked for `GOVERNMENT_OFFICIAL` and `RESCUE_TEAM` roles.
+  6. The frontend lacked department-level mission queries and role-tailored workspaces for District Admins, Supervisory Government Officials, and Field Responders.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Backend (`rescue-service`)**:
+    - `RescueDepartment.java`: Added `districtAdminId` (UUID) and `governingOfficialId` (UUID).
+    - `DepartmentCreateRequest.java` & `DepartmentUpdateRequest.java`: Added `governingOfficialId`.
+    - `DepartmentResponse.java`: Added `districtAdminId` and `governingOfficialId`.
+    - `RescueDepartmentRepository.java`: Added `findByDistrictAdminId(UUID)` and `findByGoverningOfficialId(UUID)`.
+    - `RescueAuthorizationService.java`: Added `requireDepartmentAdmin(dept)` (District Admin can only edit their own stations), `requireDepartmentView(dept)` and `requireMissionView(mission)` (permitting linked Government Officials), plus role helpers.
+    - `DepartmentServiceImpl.java`: Enforced `districtAdminId` capture on creation, `requireDepartmentAdmin` on update/availability/delete, scoped `getAllDepartments()` by role, and mapped response fields.
+    - `RescueMissionServiceImpl.java`:
+      - Fixed inverted coordinate bug in `processLocationTelemetry`: corrected to `redisGeoService.updateUnitLocation(unitId, latitude, longitude)`.
+      - Updated `getMissionsByDepartmentId` to authorize via `requireDepartmentView(dept)`.
+    - `TelemetryService.java`: Dual-keyed Redis GEO entries for both `unitId` (department) and `missionId` so distance calculations never return `Double.MAX_VALUE`.
+    - `RescueMissionController.java`: Added `GET /api/v1/rescue/missions/department/{departmentId}` and enhanced distance fallback in `/live-status`.
+    - `application.properties`: Added PostgreSQL dialect configuration.
+    - `RescueAuthorizationServiceTest.java`: Added unit tests for district ownership and linked government official mission/department view.
+  - **Frontend (`dmsFrontend`)**:
+    - `src/api/rescue.js`: Added `updateDepartment`, `missionsForDepartment`, `liveStatus`, and `pingTelemetry`.
+    - `src/api/governmentOfficials.js`: Added `eligible`, `byDepartment`, and `suggestions`.
+    - `src/App.jsx`: Updated `/rescue` route guard to allow `['DISTRICT_ADMIN', 'GOVERNMENT_OFFICIAL', 'RESCUE_TEAM', 'SUPER_ADMIN']`.
+    - `src/pages/Admin.jsx`: Added supervisory official linking to station registration and active station table, with interactive link modal and delete action.
+    - `src/pages/Rescue.jsx`: Completely overhauled with role-tailored consoles:
+      - District Admin: Tactical dispatch console & station mission tracking.
+      - Supervisory Government Official: Station overview banner & real-time team mission tracking.
+      - Rescue Team: Field responder console with GPS telemetry pings, live proximity geofencing, mission completion with victim extraction count (triggering Kafka events to Hospital Service), and backup escalation modals.
+- **Files changed**:
+  - `rescue/src/main/java/com/dms/rescueService/rescue/controller/RescueMissionController.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/dto/request/DepartmentCreateRequest.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/dto/request/DepartmentUpdateRequest.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/dto/response/DepartmentResponse.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/entity/RescueDepartment.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/repository/RescueDepartmentRepository.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/security/RescueAuthorizationService.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/service/TelemetryService.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/service/impl/DepartmentServiceImpl.java`
+  - `rescue/src/main/java/com/dms/rescueService/rescue/service/impl/RescueMissionServiceImpl.java`
+  - `rescue/src/main/resources/application.properties`
+  - `rescue/src/test/java/com/dms/rescueService/rescue/security/RescueAuthorizationServiceTest.java`
+  - `dmsFrontend/src/api/rescue.js`
+  - `dmsFrontend/src/api/governmentOfficials.js`
+  - `dmsFrontend/src/App.jsx`
+  - `dmsFrontend/src/pages/Admin.jsx`
+  - `dmsFrontend/src/pages/Rescue.jsx`
+- **Testing performed**:
+  - `rescue`: `mvn test -Dtest=RescueAuthorizationServiceTest` -> **BUILD SUCCESS** (4 tests passed, 0 failures).
+  - `rescue`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,685 modules transformed, 0 errors, 12.21s).
+- **Result**: PASSED.
+
+---
+
+### Task 22: Hospital Patient Admissions & Clinical Intake Overhaul
+- **Problem**:
+  1. `PatientAdmission.java` lacked demographic and identification fields (`patientName`, `age`, `gender`, `triageNotes`, and `status`), recording only UUIDs and triage level.
+  2. No query endpoints existed in `PatientAdmissionController` to fetch admissions for a hospital facility, leaving hospital administrators unable to review occupied beds.
+  3. No patient lifecycle tracking existed (`ADMITTED`, `TRANSFERRED`, `DISCHARGED`), and there was no transfer mechanism to move patients while returning beds.
+  4. The frontend completely lacked a patient intake and bed allocation UI.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Backend (`hospital-service`)**:
+    - Created `AdmissionStatus.java` (`ADMITTED`, `TRANSFERRED`, `DISCHARGED`).
+    - Extended `PatientAdmission.java` with `patientName`, `age`, `gender`, `triageNotes`, and `status`.
+    - Extended `PatientAdmissionRequest.java` and `PatientAdmissionResponse.java` with demographic, clinical, and status fields.
+    - Added `findByHospitalIdOrderByAdmittedAtDesc(UUID hospitalId)` in `PatientAdmissionRepository.java`.
+    - Implemented `getAdmissionsForHospital(UUID hospitalId, Boolean activeOnly)` and `transferPatient(UUID admissionId, String transferNotes)` in `PatientAdmissionService` and `PatientAdmissionServiceImpl` with pessimistic locking on bed increments.
+    - Exposed `GET /api/v1/admissions/hospitals/{hospitalId}` and `PATCH /api/v1/admissions/{admissionId}/transfer` in `PatientAdmissionController.java` with scoped authorization (`canManageHospital`).
+    - Created unit test suite `PatientAdmissionServiceTest.java` (6 tests passed, 0 failures).
+  - **Frontend (`dmsFrontend`)**:
+    - Added `admissions`, `admitPatient`, `dischargePatient`, and `transferPatient` in `src/api/hospitals.js`.
+    - Created `src/components/HospitalPatientModal.jsx` featuring:
+      - Live bed counters (General and ICU).
+      - Admitted Patients Roster with active-only filter, triage priority badges (`RED`, `YELLOW`, `GREEN`, `BLACK`), and bed type indicators.
+      - Discharge and Transfer actions with instant bed release.
+      - Patient Intake form with patient name, age, gender, triage severity, ICU bed toggle, incident linking, and clinical notes.
+    - Embedded `HospitalPatientModal` into `AdminHospitals.jsx` and `Hospitals.jsx`.
+- **Files changed**:
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/entity/AdmissionStatus.java` (created)
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/entity/PatientAdmission.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/dto/request/PatientAdmissionRequest.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/dto/response/PatientAdmissionResponse.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/repository/PatientAdmissionRepository.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/PatientAdmissionService.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/impl/PatientAdmissionServiceImpl.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/PatientAdmissionController.java`
+  - `hospital/src/test/java/com/dms/hospitalService/hospital/service/PatientAdmissionServiceTest.java` (created)
+  - `dmsFrontend/src/api/hospitals.js`
+  - `dmsFrontend/src/components/HospitalPatientModal.jsx` (created)
+  - `dmsFrontend/src/pages/AdminHospitals.jsx`
+  - `dmsFrontend/src/pages/Hospitals.jsx`
+- **Testing performed**:
+  - `hospital`: `mvn test -Dtest=PatientAdmissionServiceTest` -> **BUILD SUCCESS** (6 tests passed, 0 failures).
+  - `hospital`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,686 modules transformed, 0 errors, 5.04s).
+- **Result**: PASSED.
+
+---
+
+### Task 23: Two-Stage Supply Chain & Delivery Confirmation (Logistics to Hospital Service Integration)
+- **Problem**:
+  1. Hospital inventory was previously restocked eagerly on `SupplyDispatchedEvent` when goods were merely in-transit on a vehicle, creating inaccurate hospital stock levels before goods physically arrived.
+  2. Logistics delivery completion (`PATCH /api/v1/logistics/dispatches/{orderId}/delivered`) updated order status and vehicle status but never emitted an event to notify downstream hospital facilities.
+  3. Hospital staff lacked authorization to confirm delivery receipts for incoming convoys arriving at their facility.
+  4. Hospital service lacked an idempotent delivery receipt registry (`HospitalDeliveryReceipt`), creating risks of duplicate restocking upon message retries.
+  5. Cross-service naming divergence (`BLOOD_O_NEG` vs `O_NEGATIVE_BLOOD`, `ANTIVENOM` vs `ANTI_VENOM`) caused unhandled restock errors.
+  6. The frontend lacked a facility emergency shortage ordering interface and inbound convoy delivery confirmation controls.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Backend (`logistics-service`)**:
+    - Created `SupplyDeliveredEvent.java` event DTO.
+    - Updated `LogisticsManagementService.java` to inject `KafkaTemplate` and emit `SupplyDeliveredEvent` to `supply-delivered-topic` upon delivery completion.
+    - Updated `LogisticsController.java` to permit `HOSPITAL` role on `PATCH /dispatches/{orderId}/delivered`.
+    - Added `application.kafka.topic.supply-delivered=supply-delivered-topic` to `application.properties`.
+  - **Backend (`hospital-service`)**:
+    - Updated `application.properties` with `spring.jpa.hibernate.ddl-auto=update` and topic `supply-delivered-topic`.
+    - Created `HospitalDeliveryReceipt.java` entity (`tbl_hospital_delivery_receipts`) and `HospitalDeliveryReceiptRepository.java`.
+    - Created `SupplyDeliveredEvent.java` DTO.
+    - Updated `KafkaConsumerConfig.java` with `supplyDeliveredConsumerFactory` and `supplyDeliveredKafkaListenerContainerFactory`.
+    - Updated `InventoryServiceImpl.java` with resilient cross-service item type normalization (`resolveItemType`) supporting aliases.
+    - Updated `HospitalKafkaConsumer.java`: decoupled eager restocking from `consumeSupplyDispatched` (in-transit telemetry notice only); implemented `consumeSupplyDelivered` with exactly-once idempotency checks (`existsByDispatchOrderId`), inventory restocking, and receipt persistence.
+    - Updated `HospitalInventoryController.java`: added `GET /{hospitalId}/delivery-receipts` and enabled `POST /{hospitalId}/supplies/request`.
+    - Created unit test suite `HospitalDeliveryReceiptTest.java` (3 tests passed, 0 failures).
+  - **Frontend (`dmsFrontend`)**:
+    - Updated `src/api/hospitals.js` with `requestSupplies`, `declareShortage`, and `deliveryReceipts`.
+    - Upgraded `src/pages/HospitalInventory.jsx`:
+      - Added "Request Emergency Restock" button and modal for broadcasting urgent shortages to Logistics.
+      - Added "Inbound Supply Convoys & Active Dispatches" section with live vehicle status, ETA, and "Confirm Delivery / Receive Stock" action button.
+      - Added "Delivery Receipts & Stock Ingestion Log" audit table.
+    - Upgraded `src/pages/Logistics.jsx` with destination hospital dropdown selector and delivery confirmation feedback.
+- **Files changed**:
+  - `logistics/src/main/java/com/dms/logisticsService/logistics/dto/event/SupplyDeliveredEvent.java` (created)
+  - `logistics/src/main/java/com/dms/logisticsService/logistics/service/LogisticsManagementService.java`
+  - `logistics/src/main/java/com/dms/logisticsService/logistics/controller/LogisticsController.java`
+  - `logistics/src/main/resources/application.properties`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/entity/HospitalDeliveryReceipt.java` (created)
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/repository/HospitalDeliveryReceiptRepository.java` (created)
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/kafka/event/SupplyDeliveredEvent.java` (created)
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/config/KafkaConsumerConfig.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/impl/InventoryServiceImpl.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/kafka/consumer/HospitalKafkaConsumer.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/HospitalInventoryController.java`
+  - `hospital/src/main/resources/application.properties`
+  - `hospital/src/test/java/com/dms/hospitalService/hospital/kafka/consumer/HospitalDeliveryReceiptTest.java` (created)
+  - `logistics/src/test/java/com/dms/logisticsService/logistics/service/LogisticsManagementServiceTest.java` (created)
+  - `dmsFrontend/src/api/hospitals.js`
+  - `dmsFrontend/src/pages/HospitalInventory.jsx`
+  - `dmsFrontend/src/pages/Logistics.jsx`
+- **Testing performed**:
+  - `logistics`: `mvn test -Dtest=LogisticsManagementServiceTest` -> **BUILD SUCCESS** (2 tests passed, 0 failures).
+  - `logistics`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `hospital`: `mvn test -Dtest=HospitalDeliveryReceiptTest` -> **BUILD SUCCESS** (3 tests passed, 0 failures).
+  - `hospital`: `mvn test -Dtest=PatientAdmissionServiceTest` -> **BUILD SUCCESS** (6 tests passed, 0 failures).
+  - `hospital`: `mvn test-compile` -> **BUILD SUCCESS**.
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,686 modules transformed, 0 errors, 8.66s).
+- **Result**: PASSED.
+
+---
+
+### Task 24: Hospital Facility Profile, Role-Scoped Navigation & Clinical Operations Workspace
+- **Problem**:
+  1. Hospital administrators could register using Super Admin invitation codes, but could not link or retrieve their facility profile (`GET /api/v1/hospitals/me` was missing, and `GET /api/v1/hospitals/admin` threw 403 Forbidden).
+  2. Frontend `Profile.jsx` lacked a dedicated `HOSPITAL` profile, preventing hospital staff from completing facility coordinates, bed counts, and clinical specialties.
+  3. Navigation (`AppShell.jsx`), dropdown (`ProfileDropdown.jsx`), and dashboard (`Dashboard.jsx`) displayed citizen-only features (SOS quick alerts, "I'm Safe", personal safety hub, crisis helplines) or irrelevant governance panels to hospital users.
+  4. Hospital staff needed quick dashboard shortcuts to check live bed availability, admit and discharge patients, and request emergency supply replenishments from logistics.
+  5. Clarification was required on why `DISTRICT_ADMIN` registration was blocked and how `RESCUE_TEAM` units are provisioned.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Backend (`hospital-service`)**:
+    - Added `findByAdminUserId(UUID)`, `existsByAdminUserId(UUID)`, and `findByAdminUserId(UUID, Pageable)` in `HospitalRepository.java`.
+    - Declared `getHospitalByAdminUserId` and `listHospitalsForAdmin` in `HospitalService.java` and implemented them in `HospitalServiceImpl.java`.
+    - Added facility idempotency handling in `HospitalServiceImpl.createHospital`.
+    - Added `GET /api/v1/hospitals/me` in `HospitalController.java` to fetch the authenticated hospital's profile.
+    - Updated `GET /api/v1/hospitals/admin` in `HospitalController.java` to return the hospital admin's own facility when `X-User-Role == "HOSPITAL"`.
+  - **Frontend (`dmsFrontend`)**:
+    - Added `me` and `createHospital` methods in `src/api/hospitals.js`.
+    - Enhanced `src/components/AppShell.jsx` to scope sidebar links for `HOSPITAL` strictly to "Command Overview", "Hospitals & Beds", "Facility Management", "Medical Supplies", "Emergency Alerts", and "Hospital Profile" under "Hospital Operations".
+    - Restrained `src/components/ProfileDropdown.jsx` to hide citizen SOS and distress links from hospital staff, adding clinical shortcuts.
+    - Fully implemented `HOSPITAL` profile in `src/pages/Profile.jsx` with live bed metrics, 1-click patient intake toggle (`PATCH /status`), facility coordinates, and complete registration form.
+    - Overhauled `src/pages/Dashboard.jsx` for `HOSPITAL` users: replaced citizen safety banners with a Facility Command Banner, added real-time bed metrics cards, integrated `HospitalPatientModal` for 1-click patient intake & release, and added quick links to medical supplies and restock.
+    - Fixed `ReferenceError: isHospital is not defined` in `AppShell.jsx` by explicitly declaring `const isHospital = role === "HOSPITAL";` within the component scope.
+    - Fixed `ReferenceError: Package is not defined` in `Profile.jsx` by adding `Package` to the `lucide-react` import statement.
+- **Files changed**:
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/repository/HospitalRepository.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/HospitalService.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/impl/HospitalServiceImpl.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/controller/HospitalController.java`
+  - `dmsFrontend/src/api/hospitals.js`
+  - `dmsFrontend/src/components/AppShell.jsx`
+  - `dmsFrontend/src/components/ProfileDropdown.jsx`
+  - `dmsFrontend/src/pages/Profile.jsx`
+  - `dmsFrontend/src/pages/Dashboard.jsx`
+- **Testing performed**:
+  - `hospital`: `mvn test` -> **BUILD SUCCESS** (10 tests passed: `HospitalApplicationTests`, `HospitalDeliveryReceiptTest`, `PatientAdmissionServiceTest`, 0 failures, 0 errors).
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,686 modules transformed, 0 errors, built in 8.04s).
+- **Result**: PASSED.
+
+---
+
+### Task 25: Patient Admission Triage Overhaul (Fillable Mass Incident Cause, Contact & Aadhaar IDs, and Hospital Incident Triage Feed)
+- **Problem**:
+  1. Patient admissions previously enforced a non-null UUID `incidentId` via `@NotNull` and a forced dropdown selector, preventing triage staff from admitting walk-in or mass casualty patients when a centralized incident record did not yet exist.
+  2. Patient admissions lacked structured fields for patient / next-of-kin contact numbers and optional national identity (Aadhaar ID).
+  3. Hospital staff could not view the central Incident Triage board or see disaster emergencies occurring near their hospital, impairing situational awareness and trauma intake preparedness.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Backend (`hospital-service`)**:
+    - Made `incidentId` nullable (`nullable = true`) on `PatientAdmission.java` and removed `@NotNull` constraint from `PatientAdmissionRequest.java`.
+    - Added `contactNumber` (String, length 50), `nationalId` (String, length 50), and `incidentCause` (String, length 255) to `PatientAdmission.java`, `PatientAdmissionRequest.java`, and `PatientAdmissionResponse.java`.
+    - Updated `PatientAdmissionServiceImpl.java` to map `contactNumber`, `nationalId`, and `incidentCause` in `admitPatient()` and `mapToResponse()`.
+    - Expanded unit test suite `PatientAdmissionServiceTest.java` with `testAdmitPatient_Success_WithContactAndNationalIdAndIncidentCause` verifying admissions with contact details, Aadhaar IDs, and fillable incident causes (7/7 tests passed).
+  - **Frontend (`dmsFrontend`)**:
+    - Updated `src/auth/roles.js`: Added `'HOSPITAL'` to `canAccessIncidentBoard(role)` enabling hospitals to view active disaster triage records.
+    - Updated `src/App.jsx`: Permitted `'HOSPITAL'` role on the `/incidents` route.
+    - Updated `src/components/AppShell.jsx`: Placed "Incident Triage" link under "Hospital Operations" in the sidebar for hospital users.
+    - Updated `src/pages/Dashboard.jsx`: Configured the District Emergency & Casualty Triage Feed to display live near-hospital emergencies for hospital admins.
+    - Overhauled `src/components/HospitalPatientModal.jsx`:
+      - Added fields for Contact Phone and Aadhaar / National ID (marked optional).
+      - Added a fillable "What Caused the Trauma / Mass Incident Trigger" text field so staff are not restricted to dropdown selection.
+      - Integrated a live **"Nearby Incident Triage"** situational awareness banner displaying active district emergencies with 1-click auto-fill or custom cause entry.
+      - Updated Admitted Patients Roster table to display contact number, Aadhaar ID, and disaster cause.
+- **Files changed**:
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/entity/PatientAdmission.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/dto/request/PatientAdmissionRequest.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/dto/response/PatientAdmissionResponse.java`
+  - `hospital/src/main/java/com/dms/hospitalService/hospital/service/impl/PatientAdmissionServiceImpl.java`
+  - `hospital/src/test/java/com/dms/hospitalService/hospital/service/PatientAdmissionServiceTest.java`
+  - `dmsFrontend/src/auth/roles.js`
+  - `dmsFrontend/src/App.jsx`
+  - `dmsFrontend/src/components/AppShell.jsx`
+  - `dmsFrontend/src/pages/Dashboard.jsx`
+  - `dmsFrontend/src/components/HospitalPatientModal.jsx`
+- **Testing performed**:
+  - `hospital`: `mvn test -Dtest=PatientAdmissionServiceTest` -> **BUILD SUCCESS** (7 tests passed, 0 failures, 0 errors).
+  - `hospital`: `mvn test -Dtest=HospitalDeliveryReceiptTest` -> **BUILD SUCCESS** (3 tests passed, 0 failures, 0 errors).
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,686 modules transformed, 0 errors, built in 22.12s).
+- **Result**: PASSED.
+
+### Task 26: Patient Admission Database Constraint Fix (Nullable incident_id)
+- **Problem**:
+  - Hospital staff attempting to admit walk-in, self-referred, or mass casualty patients without linking an existing incident ID encountered `DataIntegrityViolationException: ERROR: null value in column "incident_id" of relation "tbl_patient_admissions" violates not-null constraint`.
+  - While Java JPA entity `PatientAdmission.java` had been configured with `@Column(nullable = true)`, Hibernate's `ddl-auto=update` does not alter existing database columns to drop `NOT NULL` constraints, leaving the PostgreSQL database constraint intact on `hospital_db`.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - **Database Schema**: Executed `ALTER TABLE tbl_patient_admissions ALTER COLUMN incident_id DROP NOT NULL;` on PostgreSQL `hospital_db`.
+  - **Migrations**: Created `hospital/src/main/resources/db/migration/V2__alter_patient_admissions_incident_id_nullable.sql` to version-control the nullable column modification.
+- **Files changed**:
+  - `hospital/src/main/resources/db/migration/V2__alter_patient_admissions_incident_id_nullable.sql` (created)
+  - PostgreSQL `hospital_db` (`tbl_patient_admissions`)
+- **Important implementation decisions**:
+  - Maintained backward compatibility with existing incident-linked admissions while enabling unconstrained walk-in/triage admissions.
+- **Testing performed**:
+  - `hospital`: `mvn test` -> **BUILD SUCCESS** (11 tests passed: `HospitalApplicationTests`, `HospitalDeliveryReceiptTest`, and `PatientAdmissionServiceTest`, 0 failures, 0 errors).
+  - Physical database verification: executed direct SQL insert with `incident_id = NULL` into `tbl_patient_admissions` and confirmed successful row insertion.
+- **Result**: PASSED.
+
+---
+
 ## Remaining Work & Status
-- **Current Status**: All Microservices, Gateway Security, Department Authorization, and Frontend Role Alignments are FULLY IMPLEMENTED and TESTED!
-  - Task 16: Photo Upload, On-Behalf Reporting, Role-Separated Profiles & Brand Navigation — **IMPLEMENTED & TESTED**
-  - Task 17: Security Hardening, Anti-Spoofing & Comprehensive Role Authorization Across Microservices Mesh — **IMPLEMENTED & TESTED**
-  - Task 18: Department-Based Authorization, Hospital Management Restrictions & Incident Verification Scoping (Approach 1) — **IMPLEMENTED & TESTED**
-  - Task 19: Complete Navbar & Profile Experience Redesign with Expanded Vibrant Design System — **IMPLEMENTED & TESTED**
-  - Task 20: DMS Public Landing Page Navbar: Complete Premium Redesign — **IMPLEMENTED & TESTED**
+- **Current Status**: All Architectural Phases (Phase 1 through Phase 4), Hospital Operational Flows (Task 24), Patient Triage & Incident Feed Overhaul (Task 25), and Patient Admission Constraint Fix (Task 26) are **FULLY IMPLEMENTED & TESTED** across all microservices and frontend!
+  - Task 21: Rescue Team District Ownership, Government Official Linkage & Mission Command Integration — **IMPLEMENTED & TESTED**
+  - Task 22: Hospital Patient Admissions & Clinical Intake Overhaul — **IMPLEMENTED & TESTED**
+  - Task 23: Two-Stage Supply Chain & Delivery Confirmation (Logistics to Hospital Service integration) — **IMPLEMENTED & TESTED**
+  - Task 24: Hospital Facility Profile, Role-Scoped Navigation & Clinical Operations Workspace — **IMPLEMENTED & TESTED**
+  - Task 25: Patient Admission Triage Overhaul (Fillable Mass Incident Cause, Contact & Aadhaar IDs, and Hospital Incident Triage Feed) — **IMPLEMENTED & TESTED**
+  - Task 26: Patient Admission Database Constraint Fix (Nullable incident_id) — **IMPLEMENTED & TESTED**
+
+
+
+
 
 
 

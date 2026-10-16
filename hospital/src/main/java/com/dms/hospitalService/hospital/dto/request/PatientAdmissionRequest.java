@@ -9,7 +9,7 @@ import java.util.UUID;
 @Data
 public class PatientAdmissionRequest {
 
-    @NotNull(message = "Incident ID is required to track the disaster")
+    // Optional for walk-in patients or when mass incident cause is filled directly
     private UUID incidentId;
 
     // Optional, as a patient might walk in without a rescue team
@@ -20,4 +20,12 @@ public class PatientAdmissionRequest {
 
     @NotNull(message = "ICU requirement flag is required")
     private Boolean requiresIcu;
+
+    private String patientName;
+    private Integer age;
+    private String gender;
+    private String contactNumber;
+    private String nationalId;
+    private String incidentCause;
+    private String triageNotes;
 }

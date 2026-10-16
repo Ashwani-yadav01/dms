@@ -52,10 +52,18 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
                 .hospital(hospital)
                 .triageLevel(request.getTriageLevel())
                 .requiresIcu(request.getRequiresIcu())
+                .patientName(request.getPatientName() != null && !request.getPatientName().isBlank() ? request.getPatientName().trim() : "Unidentified Victim")
+                .age(request.getAge())
+                .gender(request.getGender())
+                .contactNumber(request.getContactNumber() != null && !request.getContactNumber().isBlank() ? request.getContactNumber().trim() : null)
+                .nationalId(request.getNationalId() != null && !request.getNationalId().isBlank() ? request.getNationalId().trim() : null)
+                .incidentCause(request.getIncidentCause() != null && !request.getIncidentCause().isBlank() ? request.getIncidentCause().trim() : null)
+                .triageNotes(request.getTriageNotes())
+                .status(com.dms.hospitalService.hospital.entity.AdmissionStatus.ADMITTED)
                 .build();
 
         admission = admissionRepository.save(admission);
-        log.info("Admitted patient for incident {} to hospital {}", request.getIncidentId(), hospital.getName());
+        log.info("Admitted patient {} for incident {} to hospital {}", admission.getPatientName(), request.getIncidentId(), hospital.getName());
 
         return mapToResponse(admission);
     }
@@ -67,7 +75,7 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
                 .orElseThrow(() -> new IllegalArgumentException("Admission not found"));
 
         if (admission.getDischargedAt() != null) {
-            throw new IllegalStateException("Patient is already discharged");
+            throw new IllegalStateException("Patient is already discharged or transferred");
         }
 
         // Lock hospital to return the bed safely
@@ -84,9 +92,58 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
         hospitalRepository.save(hospital);
 
         admission.setDischargedAt(LocalDateTime.now());
+        admission.setStatus(com.dms.hospitalService.hospital.entity.AdmissionStatus.DISCHARGED);
         admission = admissionRepository.save(admission);
 
+        log.info("Discharged patient {} from hospital {}", admission.getPatientName(), hospital.getName());
         return mapToResponse(admission);
+    }
+
+    @Override
+    @Transactional
+    public PatientAdmissionResponse transferPatient(UUID admissionId, String transferNotes) {
+        PatientAdmission admission = admissionRepository.findById(admissionId)
+                .orElseThrow(() -> new IllegalArgumentException("Admission not found"));
+
+        if (admission.getDischargedAt() != null) {
+            throw new IllegalStateException("Patient is already discharged or transferred");
+        }
+
+        // Release the bed at current hospital using pessimistic lock
+        Hospital hospital = hospitalRepository.findByIdForUpdate(admission.getHospital().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Hospital not found"));
+
+        if (admission.getRequiresIcu()) {
+            hospital.setAvailableIcuBeds(hospital.getAvailableIcuBeds() + 1);
+        } else {
+            hospital.setAvailableGeneralBeds(hospital.getAvailableGeneralBeds() + 1);
+        }
+
+        hospital.setBedLastUpdatedAt(LocalDateTime.now());
+        hospitalRepository.save(hospital);
+
+        admission.setDischargedAt(LocalDateTime.now());
+        admission.setStatus(com.dms.hospitalService.hospital.entity.AdmissionStatus.TRANSFERRED);
+        if (transferNotes != null && !transferNotes.isBlank()) {
+            String existing = admission.getTriageNotes() != null ? admission.getTriageNotes() + " | " : "";
+            admission.setTriageNotes(existing + "Transfer Notes: " + transferNotes.trim());
+        }
+        admission = admissionRepository.save(admission);
+
+        log.info("Transferred patient {} from hospital {}", admission.getPatientName(), hospital.getName());
+        return mapToResponse(admission);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<PatientAdmissionResponse> getAdmissionsForHospital(UUID hospitalId, Boolean activeOnly) {
+        java.util.List<PatientAdmission> admissions;
+        if (Boolean.TRUE.equals(activeOnly)) {
+            admissions = admissionRepository.findByHospitalIdAndDischargedAtIsNull(hospitalId);
+        } else {
+            admissions = admissionRepository.findByHospitalIdOrderByAdmittedAtDesc(hospitalId);
+        }
+        return admissions.stream().map(this::mapToResponse).toList();
     }
 
     private PatientAdmissionResponse mapToResponse(PatientAdmission a) {
@@ -98,6 +155,14 @@ public class PatientAdmissionServiceImpl implements PatientAdmissionService {
                 .hospitalName(a.getHospital().getName())
                 .triageLevel(a.getTriageLevel())
                 .requiresIcu(a.getRequiresIcu())
+                .patientName(a.getPatientName())
+                .age(a.getAge())
+                .gender(a.getGender())
+                .contactNumber(a.getContactNumber())
+                .nationalId(a.getNationalId())
+                .incidentCause(a.getIncidentCause())
+                .triageNotes(a.getTriageNotes())
+                .status(a.getStatus())
                 .admittedAt(a.getAdmittedAt())
                 .dischargedAt(a.getDischargedAt())
                 .build();

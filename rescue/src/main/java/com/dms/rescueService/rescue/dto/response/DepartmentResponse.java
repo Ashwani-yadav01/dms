@@ -25,6 +25,8 @@ public class DepartmentResponse {
     private Integer activeMissionsCount;
     private Boolean isAvailable;
     private UUID stationChiefId;
+    private UUID districtAdminId;
+    private UUID governingOfficialId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

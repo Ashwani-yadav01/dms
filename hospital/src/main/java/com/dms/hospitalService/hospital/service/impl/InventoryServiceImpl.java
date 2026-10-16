@@ -113,10 +113,8 @@ public class InventoryServiceImpl implements InventoryService {
         log.info("📦 Restocking inventory for hospital: {}, item: {}, qty: +{}",
                 hospitalId, itemTypeName, quantity);
 
-        InventoryItemType itemTypeEnum;
-        try {
-            itemTypeEnum = InventoryItemType.valueOf(itemTypeName.toUpperCase().trim());
-        } catch (IllegalArgumentException ex) {
+        InventoryItemType itemTypeEnum = resolveItemType(itemTypeName);
+        if (itemTypeEnum == null) {
             log.error("Unknown ItemType: {}. Cannot restock inventory.", itemTypeName);
             return;
         }
@@ -206,5 +204,29 @@ public class InventoryServiceImpl implements InventoryService {
                 .isCriticalShortage(i.getCurrentQuantity() <= i.getCriticalThreshold())
                 .lastUpdated(i.getLastUpdated())
                 .build();
+    }
+
+    private InventoryItemType resolveItemType(String itemTypeName) {
+        if (itemTypeName == null || itemTypeName.isBlank()) {
+            return null;
+        }
+        String normalized = itemTypeName.trim().toUpperCase();
+        switch (normalized) {
+            case "BLOOD_O_NEG":
+            case "BLOOD_O_NEGATIVE":
+            case "O_NEG_BLOOD":
+                return InventoryItemType.O_NEGATIVE_BLOOD;
+            case "ANTIVENOM":
+                return InventoryItemType.ANTI_VENOM;
+            case "TRAUMA_SURGICAL_KIT":
+            case "TRAUMA_SURGICAL":
+                return InventoryItemType.TRAUMA_KIT;
+            default:
+                try {
+                    return InventoryItemType.valueOf(normalized);
+                } catch (IllegalArgumentException ex) {
+                    return null;
+                }
+        }
     }
 }

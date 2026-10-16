@@ -33,12 +33,54 @@ class RescueAuthorizationServiceTest {
         assertDoesNotThrow(authorization::requireDispatcher);
     }
 
+    @Test void districtAdminCanOnlyManageOwnedDepartments() {
+        UUID adminId = UUID.randomUUID();
+        UUID otherAdminId = UUID.randomUUID();
+        RescueDepartment owned = new RescueDepartment();
+        owned.setId(departmentId);
+        owned.setDistrictAdminId(adminId);
+
+        RescueDepartment other = new RescueDepartment();
+        other.setId(UUID.randomUUID());
+        other.setDistrictAdminId(otherAdminId);
+
+        authenticateWithId(adminId, "DISTRICT_ADMIN", Map.of());
+        assertDoesNotThrow(() -> authorization.requireDepartmentAdmin(owned));
+        assertThrows(RescueAuthorizationException.class, () -> authorization.requireDepartmentAdmin(other));
+
+        authenticate("SUPER_ADMIN", Map.of());
+        assertDoesNotThrow(() -> authorization.requireDepartmentAdmin(other));
+    }
+
+    @Test void linkedGovernmentOfficialCanViewDepartmentAndMissions() {
+        UUID officialId = UUID.randomUUID();
+        UUID otherOfficialId = UUID.randomUUID();
+
+        RescueDepartment dept = new RescueDepartment();
+        dept.setId(departmentId);
+        dept.setGoverningOfficialId(officialId);
+
+        RescueMission mission = mission(departmentId);
+        mission.getDepartment().setGoverningOfficialId(officialId);
+
+        authenticateWithId(officialId, "GOVERNMENT_OFFICIAL", Map.of());
+        assertDoesNotThrow(() -> authorization.requireDepartmentView(dept));
+        assertDoesNotThrow(() -> authorization.requireMissionView(mission));
+
+        authenticateWithId(otherOfficialId, "GOVERNMENT_OFFICIAL", Map.of());
+        assertThrows(RescueAuthorizationException.class, () -> authorization.requireDepartmentView(dept));
+        assertThrows(RescueAuthorizationException.class, () -> authorization.requireMissionView(mission));
+    }
+
     private RescueMission mission(UUID departmentId) {
         RescueDepartment department = new RescueDepartment(); department.setId(departmentId);
         RescueMission mission = new RescueMission(); mission.setDepartment(department); return mission;
     }
     private void authenticate(String role, Map<String, Object> claims) {
-        var auth = new UsernamePasswordAuthenticationToken(UUID.randomUUID(), null,
+        authenticateWithId(UUID.randomUUID(), role, claims);
+    }
+    private void authenticateWithId(UUID id, String role, Map<String, Object> claims) {
+        var auth = new UsernamePasswordAuthenticationToken(id, null,
                 List.of(new SimpleGrantedAuthority("ROLE_" + role)));
         auth.setDetails(claims); SecurityContextHolder.getContext().setAuthentication(auth);
     }

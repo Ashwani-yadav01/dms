@@ -53,6 +53,32 @@ public class HospitalServiceImpl implements HospitalService {
     @Override
     @Transactional
     public HospitalResponse createHospital(HospitalCreateRequest request) {
+        if (request.getAdminUserId() != null) {
+            Optional<Hospital> existingOpt = hospitalRepository.findByAdminUserId(request.getAdminUserId());
+            if (existingOpt.isPresent()) {
+                Hospital existing = existingOpt.get();
+                existing.setName(request.getName());
+                existing.setEmail(request.getEmail());
+                existing.setPhoneNumber(request.getPhoneNumber());
+                existing.setAddress(request.getAddress());
+                existing.setType(request.getType());
+                existing.setLatitude(request.getLatitude());
+                existing.setLongitude(request.getLongitude());
+                existing.setElevationMeters(request.getElevationMeters());
+                existing.setTotalGeneralBeds(request.getTotalGeneralBeds());
+                existing.setTotalIcuBeds(request.getTotalIcuBeds());
+                if (request.getSpecialities() != null) {
+                    existing.setSpecialities(request.getSpecialities());
+                }
+                existing.setLocationLastUpdatedAt(LocalDateTime.now());
+                existing = hospitalRepository.save(existing);
+                if (existing.getStatus() == HospitalStatus.ACTIVE) {
+                    geoService.registerHospitalLocation(existing.getId(), existing.getLatitude(), existing.getLongitude());
+                }
+                recordAudit(existing.getId(), request.getAdminUserId(), "HOSPITAL", "UPDATE", "Hospital profile updated", null, existing.getStatus().name());
+                return mapToResponse(existing);
+            }
+        }
         HospitalStatus initialStatus = request.getStatus() != null ? request.getStatus() : HospitalStatus.PENDING_VERIFICATION;
         Hospital hospital = Hospital.builder()
                 .name(request.getName())
@@ -453,5 +479,26 @@ public class HospitalServiceImpl implements HospitalService {
         Page<Hospital> page = hospitalRepository.findByNameContainingIgnoreCaseAndStatus(
                 name, HospitalStatus.ACTIVE, pageable);
         return page.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public HospitalResponse getHospitalByAdminUserId(UUID adminUserId) {
+        if (adminUserId == null) {
+            throw new IllegalArgumentException("Admin user ID cannot be null");
+        }
+        Hospital hospital = hospitalRepository.findByAdminUserId(adminUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital facility not found for user: " + adminUserId));
+        return mapToResponse(hospital);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<HospitalResponse> listHospitalsForAdmin(UUID adminUserId, Pageable pageable) {
+        if (adminUserId == null) {
+            return Page.empty(pageable);
+        }
+        return hospitalRepository.findByAdminUserId(adminUserId, pageable)
+                .map(this::mapToResponse);
     }
 }

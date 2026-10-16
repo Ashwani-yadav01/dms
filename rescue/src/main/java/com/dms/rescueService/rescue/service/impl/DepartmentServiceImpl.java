@@ -102,10 +102,12 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .totalCapacity(request.getTotalCapacity() != null ? request.getTotalCapacity() : 10)
                 .activeMissionsCount(0)
                 .isAvailable(true)
+                .districtAdminId(authorization.currentUserIdOrNull())
+                .governingOfficialId(request.getGoverningOfficialId())
                 .build();
 
         RescueDepartment saved = departmentRepository.save(department);
-        log.info("Created Rescue Department: {} (ID: {})", saved.getName(), saved.getId());
+        log.info("Created Rescue Department: {} (ID: {}) owned by District Admin: {}", saved.getName(), saved.getId(), saved.getDistrictAdminId());
         return mapToResponse(saved);
     }
 
@@ -115,6 +117,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
+        authorization.requireDepartmentAdmin(dept);
 
         if (request.getName() != null && !request.getName().isBlank()) {
             dept.setName(request.getName().trim());
@@ -140,6 +143,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (request.getIsAvailable() != null) {
             dept.setIsAvailable(request.getIsAvailable());
         }
+        if (request.getGoverningOfficialId() != null) {
+            dept.setGoverningOfficialId(request.getGoverningOfficialId());
+        }
 
         RescueDepartment updated = departmentRepository.save(dept);
         log.info("Updated Rescue Department: {} (ID: {})", updated.getName(), updated.getId());
@@ -152,6 +158,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
+        authorization.requireDepartmentAdmin(dept);
 
         dept.setIsAvailable(isAvailable);
         RescueDepartment updated = departmentRepository.save(dept);
@@ -162,17 +169,38 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public DepartmentResponse getDepartmentById(UUID id) {
-        return departmentRepository.findById(id)
-                .map(this::mapToResponse)
+        RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
+        authorization.requireDepartmentView(dept);
+        return mapToResponse(dept);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentResponse> getAllDepartments() {
-        return departmentRepository.findAll().stream()
-                .map(this::mapToResponse)
-                .toList();
+        UUID actorId = authorization.currentUserIdOrNull();
+        if (authorization.isSuperAdmin()) {
+            return departmentRepository.findAll().stream().map(this::mapToResponse).toList();
+        }
+        if (authorization.isDistrictAdmin() && actorId != null) {
+            return departmentRepository.findByDistrictAdminId(actorId).stream().map(this::mapToResponse).toList();
+        }
+        if (authorization.isGovernmentOfficial() && actorId != null) {
+            return departmentRepository.findByGoverningOfficialId(actorId).stream().map(this::mapToResponse).toList();
+        }
+        if (authorization.isRescueTeam()) {
+            return departmentRepository.findAll().stream()
+                    .filter(d -> {
+                        try {
+                            authorization.requireDepartmentView(d);
+                            return true;
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    })
+                    .map(this::mapToResponse).toList();
+        }
+        return List.of();
     }
 
     @Override
@@ -197,6 +225,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         authorization.requireDispatcher();
         RescueDepartment dept = departmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + id));
+        authorization.requireDepartmentAdmin(dept);
 
         if (dept.getActiveMissionsCount() > 0) {
             throw new IllegalStateException("Cannot delete a department with active ongoing missions");
@@ -219,6 +248,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .activeMissionsCount(d.getActiveMissionsCount())
                 .isAvailable(d.getIsAvailable())
                 .stationChiefId(d.getStationChiefId())
+                .districtAdminId(d.getDistrictAdminId())
+                .governingOfficialId(d.getGoverningOfficialId())
                 .createdAt(d.getCreatedAt())
                 .updatedAt(d.getUpdatedAt())
                 .build();

@@ -35,6 +35,19 @@ public class PatientAdmissionController {
         return new ResponseEntity<>(admissionService.admitPatient(hospitalId, request), HttpStatus.CREATED);
     }
 
+    @GetMapping("/hospitals/{hospitalId}")
+    public ResponseEntity<java.util.List<PatientAdmissionResponse>> getAdmissionsForHospital(
+            HttpServletRequest httpRequest,
+            @PathVariable UUID hospitalId,
+            @RequestParam(required = false, defaultValue = "false") Boolean activeOnly) {
+
+        if (!canManageHospital(httpRequest, hospitalId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(admissionService.getAdmissionsForHospital(hospitalId, activeOnly));
+    }
+
     @PatchMapping("/{admissionId}/discharge")
     public ResponseEntity<PatientAdmissionResponse> dischargePatient(
             HttpServletRequest httpRequest,
@@ -46,6 +59,21 @@ public class PatientAdmissionController {
         }
 
         return ResponseEntity.ok(admissionService.dischargePatient(admissionId));
+    }
+
+    @PatchMapping("/{admissionId}/transfer")
+    public ResponseEntity<PatientAdmissionResponse> transferPatient(
+            HttpServletRequest httpRequest,
+            @PathVariable UUID admissionId,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+
+        UUID hospitalId = admissionService.getHospitalIdForAdmission(admissionId);
+        if (hospitalId == null || !canManageHospital(httpRequest, hospitalId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        String notes = body != null ? body.get("notes") : null;
+        return ResponseEntity.ok(admissionService.transferPatient(admissionId, notes));
     }
 
     private boolean isAuthorizedHospitalAdmin(HttpServletRequest request) {

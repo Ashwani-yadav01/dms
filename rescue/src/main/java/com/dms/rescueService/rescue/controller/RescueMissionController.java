@@ -50,6 +50,11 @@ public class RescueMissionController {
         return ResponseEntity.ok(missionService.getMissionsByIncidentId(incidentId));
     }
 
+    @GetMapping("/department/{departmentId}")
+    public ResponseEntity<List<RescueMissionResponse>> getMissionsByDepartmentId(@PathVariable UUID departmentId) {
+        return ResponseEntity.ok(missionService.getMissionsByDepartmentId(departmentId));
+    }
+
     /**
      * High-speed status check reading directly from Redis spatial cache.
      */
@@ -63,7 +68,10 @@ public class RescueMissionController {
             throw new RescueAuthorizationException("You are not authorized to perform this action.");
 
         String cachedStatus = redisGeoService.getCachedMissionStatus(id);
-        double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(id, incidentId);
+        double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(mission.getDepartmentId(), incidentId);
+        if (distanceMeters == Double.MAX_VALUE) {
+            distanceMeters = redisGeoService.getDistanceToIncidentInMeters(id, incidentId);
+        }
 
         // Handle case where team already arrived and spatial data was evicted from Redis
         boolean isOnSceneOrCompleted = "ON_SCENE".equalsIgnoreCase(cachedStatus) || "COMPLETED".equalsIgnoreCase(cachedStatus);

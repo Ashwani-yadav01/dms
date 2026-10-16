@@ -1,6 +1,8 @@
 package com.dms.hospitalService.hospital.controller;
 
 import com.dms.hospitalService.hospital.dto.response.HospitalResponse;
+import com.dms.hospitalService.hospital.entity.HospitalDeliveryReceipt;
+import com.dms.hospitalService.hospital.repository.HospitalDeliveryReceiptRepository;
 import com.dms.hospitalService.hospital.service.HospitalInventoryAlertService;
 import com.dms.hospitalService.hospital.service.HospitalService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -18,9 +21,10 @@ public class HospitalInventoryController {
 
     private final HospitalInventoryAlertService alertService;
     private final HospitalService hospitalService;
+    private final HospitalDeliveryReceiptRepository deliveryReceiptRepository;
 
-    // Example payload for Postman: {"itemType": "BLOOD_O_NEG", "requestedQuantity": 50, "urgencyLevel": "CRITICAL"}
-    @PostMapping("/{hospitalId}/inventory/shortage")
+    // Supports both /inventory/shortage and /supplies/request
+    @PostMapping(value = {"/{hospitalId}/inventory/shortage", "/{hospitalId}/supplies/request"})
     public ResponseEntity<String> declareShortage(
             HttpServletRequest httpRequest,
             @PathVariable UUID hospitalId,
@@ -34,10 +38,22 @@ public class HospitalInventoryController {
                 hospitalId,
                 request.itemType(),
                 request.requestedQuantity(),
-                request.urgencyLevel()
+                request.urgencyLevel() != null ? request.urgencyLevel() : "CRITICAL"
         );
 
-        return ResponseEntity.accepted().body("Shortage alert broadcasted to Logistics Service.");
+        return ResponseEntity.accepted().body("Supply request broadcasted to Logistics Service.");
+    }
+
+    @GetMapping("/{hospitalId}/delivery-receipts")
+    public ResponseEntity<List<HospitalDeliveryReceipt>> getDeliveryReceipts(
+            HttpServletRequest httpRequest,
+            @PathVariable UUID hospitalId) {
+
+        if (!canManageHospital(httpRequest, hospitalId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(deliveryReceiptRepository.findByHospitalIdOrderByReceivedAtDesc(hospitalId));
     }
 
     private boolean isAuthorizedHospitalAdmin(HttpServletRequest request) {

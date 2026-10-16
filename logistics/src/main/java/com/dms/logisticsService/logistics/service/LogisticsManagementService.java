@@ -12,13 +12,17 @@ import com.dms.logisticsService.logistics.entity.enums.TemperatureClass;
 import com.dms.logisticsService.logistics.entity.enums.VehicleStatus;
 import com.dms.logisticsService.logistics.repository.DispatchOrderRepository;
 import com.dms.logisticsService.logistics.repository.InventoryBatchRepository;
+import com.dms.logisticsService.logistics.dto.event.SupplyDeliveredEvent;
 import com.dms.logisticsService.logistics.repository.TransportVehicleRepository;
 import com.dms.logisticsService.logistics.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Slf4j
@@ -30,6 +34,10 @@ public class LogisticsManagementService {
     private final InventoryBatchRepository inventoryBatchRepository;
     private final TransportVehicleRepository transportVehicleRepository;
     private final DispatchOrderRepository dispatchOrderRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Value("${application.kafka.topic.supply-delivered:supply-delivered-topic}")
+    private String supplyDeliveredTopic;
 
     @Transactional
     public Warehouse createWarehouse(WarehouseCreateRequest request) {
@@ -104,6 +112,30 @@ public class LogisticsManagementService {
 
         DispatchOrder updatedOrder = dispatchOrderRepository.save(order);
         log.info("Dispatch order {} updated to DELIVERED.", orderId);
+
+        // Publish SupplyDeliveredEvent to notify Hospital Service for receipt recording & restocking
+        try {
+            SupplyDeliveredEvent event = SupplyDeliveredEvent.builder()
+                    .dispatchOrderId(updatedOrder.getId())
+                    .targetHospitalId(updatedOrder.getTargetHospitalId())
+                    .sourceWarehouseId(updatedOrder.getSourceWarehouse() != null ? updatedOrder.getSourceWarehouse().getId() : null)
+                    .warehouseName(updatedOrder.getSourceWarehouse() != null ? updatedOrder.getSourceWarehouse().getName() : "Central Logistics Warehouse")
+                    .itemType(updatedOrder.getItemType())
+                    .requestedQuantity(updatedOrder.getRequestedQuantity())
+                    .deliveredQuantity(updatedOrder.getDispatchedQuantity())
+                    .vehicleId(vehicle != null ? vehicle.getId() : null)
+                    .vehicleNumber(vehicle != null ? vehicle.getVehicleNumber() : null)
+                    .status(updatedOrder.getStatus())
+                    .deliveredAt(Instant.now())
+                    .build();
+
+            kafkaTemplate.send(supplyDeliveredTopic, updatedOrder.getId().toString(), event);
+            log.info("Published SupplyDeliveredEvent for order {} to topic [{}]", orderId, supplyDeliveredTopic);
+        } catch (Exception e) {
+            log.error("Failed to publish SupplyDeliveredEvent for order {}: {}", orderId, e.getMessage(), e);
+        }
+
         return updatedOrder;
     }
+
 }

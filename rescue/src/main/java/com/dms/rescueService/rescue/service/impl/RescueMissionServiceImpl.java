@@ -54,7 +54,7 @@ public class RescueMissionServiceImpl implements RescueMissionService {
         UUID unitId = mission.getDepartment().getId();
         UUID incidentId = mission.getIncidentId();
 
-        redisGeoService.updateUnitLocation(unitId, longitude, latitude);
+        redisGeoService.updateUnitLocation(unitId, latitude, longitude);
 
         MissionState currentState = mapStatusToState(mission.getStatus());
         double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(unitId, incidentId);
@@ -198,7 +198,9 @@ public class RescueMissionServiceImpl implements RescueMissionService {
     @Override
     @Transactional(readOnly = true)
     public List<RescueMissionResponse> getMissionsByDepartmentId(UUID departmentId) {
-        authorization.requireDepartmentView(departmentId);
+        RescueDepartment dept = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new RuntimeException("Rescue Department not found with ID: " + departmentId));
+        authorization.requireDepartmentView(dept);
         return missionRepository.findByDepartmentId(departmentId).stream()
                 .map(this::mapToResponse)
                 .toList();

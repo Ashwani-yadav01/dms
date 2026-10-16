@@ -38,4 +38,6 @@ public interface HospitalService {
     List<com.dms.hospitalService.hospital.entity.HospitalAudit> getHospitalAudits(UUID hospitalId);
     HospitalResponse updateBedCapacity(UUID id, com.dms.hospitalService.hospital.dto.request.HospitalBedUpdateRequest request);
     Page<HospitalResponse> searchHospitalsByName(String name, Pageable pageable);
+    HospitalResponse getHospitalByAdminUserId(UUID adminUserId);
+    Page<HospitalResponse> listHospitalsForAdmin(UUID adminUserId, Pageable pageable);
 }

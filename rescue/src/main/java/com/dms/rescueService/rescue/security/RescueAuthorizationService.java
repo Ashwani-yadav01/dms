@@ -26,15 +26,62 @@ public class RescueAuthorizationService {
         if ("DISTRICT_ADMIN".equals(role()) || "SUPER_ADMIN".equals(role())) return;
         requireAssignedTeam(mission);
     }
+    public void requireDepartmentAdmin(com.dms.rescueService.rescue.entity.RescueDepartment dept) {
+        if ("SUPER_ADMIN".equals(role())) return;
+        if ("DISTRICT_ADMIN".equals(role())) {
+            UUID actorId = currentUserIdOrNull();
+            if (actorId != null && dept.getDistrictAdminId() != null && dept.getDistrictAdminId().equals(actorId)) {
+                return;
+            }
+        }
+        deny();
+    }
+    public void requireDepartmentView(com.dms.rescueService.rescue.entity.RescueDepartment dept) {
+        if ("SUPER_ADMIN".equals(role())) return;
+        UUID actorId = currentUserIdOrNull();
+        if ("DISTRICT_ADMIN".equals(role())) {
+            if (actorId != null && dept.getDistrictAdminId() != null && dept.getDistrictAdminId().equals(actorId)) {
+                return;
+            }
+        }
+        if ("GOVERNMENT_OFFICIAL".equals(role())) {
+            if (actorId != null && dept.getGoverningOfficialId() != null && dept.getGoverningOfficialId().equals(actorId)) {
+                return;
+            }
+        }
+        if ("RESCUE_TEAM".equals(role()) && claimTrue("rescueVerified")
+                && dept.getId().toString().equals(claim("rescueDepartmentId"))) {
+            return;
+        }
+        deny();
+    }
     public void requireMissionView(RescueMission mission) {
-        if ("DISTRICT_ADMIN".equals(role()) || "SUPER_ADMIN".equals(role())) return;
+        if ("SUPER_ADMIN".equals(role())) return;
+        UUID actorId = currentUserIdOrNull();
+        if ("DISTRICT_ADMIN".equals(role())) {
+            if (actorId != null && mission.getDepartment().getDistrictAdminId() != null
+                    && mission.getDepartment().getDistrictAdminId().equals(actorId)) {
+                return;
+            }
+        }
+        if ("GOVERNMENT_OFFICIAL".equals(role())) {
+            if (actorId != null && mission.getDepartment().getGoverningOfficialId() != null
+                    && mission.getDepartment().getGoverningOfficialId().equals(actorId)) {
+                return;
+            }
+        }
         requireAssignedTeam(mission);
     }
     public void requireDepartmentView(UUID departmentId) {
-        if ("DISTRICT_ADMIN".equals(role()) || "SUPER_ADMIN".equals(role())) return;
+        if ("SUPER_ADMIN".equals(role()) || "DISTRICT_ADMIN".equals(role())) return;
         if (!"RESCUE_TEAM".equals(role()) || !claimTrue("rescueVerified")
                 || !departmentId.toString().equals(claim("rescueDepartmentId"))) deny();
     }
+    public String currentRole() { return role(); }
+    public boolean isSuperAdmin() { return "SUPER_ADMIN".equals(role()); }
+    public boolean isDistrictAdmin() { return "DISTRICT_ADMIN".equals(role()); }
+    public boolean isGovernmentOfficial() { return "GOVERNMENT_OFFICIAL".equals(role()); }
+    public boolean isRescueTeam() { return "RESCUE_TEAM".equals(role()); }
     private String role() { return authentication().getAuthorities().stream().findFirst().map(a -> a.getAuthority().replace("ROLE_", "")).orElse(""); }
     private boolean claimTrue(String name) { Object v = details().get(name); return Boolean.TRUE.equals(v); }
     private String claim(String name) { Object v = details().get(name); return v == null ? null : v.toString(); }

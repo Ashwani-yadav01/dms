@@ -36,7 +36,10 @@ public class TelemetryService {
                 .orElseThrow(() -> new IllegalArgumentException("Mission not found: " + missionId));
         authorization.requireAssignedTeam(mission);
 
-        // 1. Update unit coordinates ONLY in Redis GEO (Does not touch PostgreSQL)
+        UUID unitId = mission.getDepartment().getId();
+
+        // 1. Update unit coordinates in Redis GEO for both unitId and missionId
+        redisGeoService.updateUnitLocation(unitId, latitude, longitude);
         redisGeoService.updateUnitLocation(missionId, latitude, longitude);
 
         // 2. First ping transitions DISPATCHED -> EN_ROUTE (Triggers single DB save)
@@ -45,8 +48,10 @@ public class TelemetryService {
 
             // 3. Evaluate 50m geofence while moving
         } else if (mission.getStatus() == MissionStatus.EN_ROUTE) {
-            // Correct parameter ordering: (unitId, incidentId)
-            double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(missionId, mission.getIncidentId());
+            double distanceMeters = redisGeoService.getDistanceToIncidentInMeters(unitId, mission.getIncidentId());
+            if (distanceMeters == Double.MAX_VALUE) {
+                distanceMeters = redisGeoService.getDistanceToIncidentInMeters(missionId, mission.getIncidentId());
+            }
             log.info("Mission [{}] distance to incident: {} meters", missionId, distanceMeters);
 
             // 4. Update PostgreSQL ONLY when unit reaches target geofence radius
@@ -62,6 +67,7 @@ public class TelemetryService {
                 );
 
                 // Clean up Redis spatial entries after arrival
+                redisGeoService.removeSpatialData(unitId, mission.getIncidentId());
                 redisGeoService.removeSpatialData(missionId, mission.getIncidentId());
             }
         }

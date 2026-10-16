@@ -17,6 +17,14 @@ public class PatientAdmissionResponse {
     private String hospitalName;
     private TriageLevel triageLevel;
     private Boolean requiresIcu;
+    private String patientName;
+    private Integer age;
+    private String gender;
+    private String contactNumber;
+    private String nationalId;
+    private String incidentCause;
+    private String triageNotes;
+    private com.dms.hospitalService.hospital.entity.AdmissionStatus status;
     private LocalDateTime admittedAt;
     private LocalDateTime dischargedAt;
 }

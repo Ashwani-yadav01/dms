@@ -2,6 +2,7 @@ package com.dms.hospitalService.hospital.config;
 
 import com.dms.hospitalService.hospital.kafka.event.IncidentCreatedEvent;
 import com.dms.hospitalService.hospital.kafka.event.SupplyDispatchedEvent;
+import com.dms.hospitalService.hospital.kafka.event.SupplyDeliveredEvent;
 import com.dms.hospitalService.hospital.kafka.event.VictimsExtractedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -195,6 +196,35 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<String, VictimsExtractedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(victimsExtractedConsumerFactory());
+        return factory;
+    }
+
+    // ==========================================
+    // SUPPLY DELIVERED CONSUMER & FACTORY
+    // ==========================================
+
+    @Bean
+    public ConsumerFactory<String, SupplyDeliveredEvent> supplyDeliveredConsumerFactory() {
+        JsonDeserializer<SupplyDeliveredEvent> jsonDeserializer =
+                new JsonDeserializer<>(SupplyDeliveredEvent.class, objectMapper());
+        jsonDeserializer.addTrustedPackages("com.dms.hospitalService.hospital.kafka.event");
+        jsonDeserializer.setUseTypeHeaders(false);
+
+        ErrorHandlingDeserializer<SupplyDeliveredEvent> errorHandlingDeserializer =
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+
+        return new DefaultKafkaConsumerFactory<>(
+                consumerProperties(),
+                new StringDeserializer(),
+                errorHandlingDeserializer
+        );
+    }
+
+    @Bean(name = "supplyDeliveredKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, SupplyDeliveredEvent> supplyDeliveredKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, SupplyDeliveredEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(supplyDeliveredConsumerFactory());
         return factory;
     }
 }

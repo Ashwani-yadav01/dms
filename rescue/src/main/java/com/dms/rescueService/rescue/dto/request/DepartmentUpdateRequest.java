@@ -18,4 +18,6 @@ public class DepartmentUpdateRequest {
     private Integer totalCapacity;
 
     private Boolean isAvailable;
+
+    private java.util.UUID governingOfficialId;
 }

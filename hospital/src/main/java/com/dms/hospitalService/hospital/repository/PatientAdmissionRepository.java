@@ -15,4 +15,7 @@ public interface PatientAdmissionRepository extends JpaRepository<PatientAdmissi
 
     // Find all currently active patients in a hospital (not yet discharged)
     List<PatientAdmission> findByHospitalIdAndDischargedAtIsNull(UUID hospitalId);
+
+    // Find all admissions in a hospital ordered by most recent admission
+    List<PatientAdmission> findByHospitalIdOrderByAdmittedAtDesc(UUID hospitalId);
 }

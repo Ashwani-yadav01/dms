@@ -12,5 +12,11 @@ public interface PatientAdmissionService {
     // Discharges patient and increments bed count
     PatientAdmissionResponse dischargePatient(UUID admissionId);
 
+    // Transfers patient to another facility and increments bed count
+    PatientAdmissionResponse transferPatient(UUID admissionId, String transferNotes);
+
+    // Retrieves admissions for a hospital (active only or full history)
+    java.util.List<PatientAdmissionResponse> getAdmissionsForHospital(UUID hospitalId, Boolean activeOnly);
+
     UUID getHospitalIdForAdmission(UUID admissionId);
 }

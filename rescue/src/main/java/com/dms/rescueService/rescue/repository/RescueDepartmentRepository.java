@@ -18,6 +18,10 @@ public interface RescueDepartmentRepository extends JpaRepository<RescueDepartme
 
     List<RescueDepartment> findByJurisdictionCode(String jurisdictionCode);
 
+    List<RescueDepartment> findByDistrictAdminId(UUID districtAdminId);
+
+    List<RescueDepartment> findByGoverningOfficialId(UUID governingOfficialId);
+
     // PostgreSQL-compatible Haversine spatial query
     @Query(value = """
         SELECT * FROM (

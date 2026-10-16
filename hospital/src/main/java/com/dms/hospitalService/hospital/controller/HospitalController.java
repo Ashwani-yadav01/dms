@@ -30,6 +30,19 @@ public class HospitalController {
 
     private final HospitalService hospitalService;
 
+    @GetMapping("/me")
+    public ResponseEntity<HospitalResponse> getMyHospital(HttpServletRequest request) {
+        UUID actorId = extractUserId(request);
+        if (actorId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        try {
+            return ResponseEntity.ok(hospitalService.getHospitalByAdminUserId(actorId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
     @PostMapping
     public ResponseEntity<HospitalResponse> createHospital(
             HttpServletRequest request,
@@ -117,6 +130,13 @@ public class HospitalController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
+
+        String role = request.getHeader("X-User-Role");
+        if ("HOSPITAL".equals(role)) {
+            UUID actorId = extractUserId(request);
+            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            return ResponseEntity.ok(hospitalService.listHospitalsForAdmin(actorId, pageable));
+        }
 
         if (!isAuthorizedHospitalAdmin(request)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();

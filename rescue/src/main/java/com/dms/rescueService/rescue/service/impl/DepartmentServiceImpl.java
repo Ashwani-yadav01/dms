@@ -92,6 +92,17 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponse createDepartment(DepartmentCreateRequest request) {
         authorization.requireDispatcher();
+
+        if (request.getStationChiefId() != null) {
+            List<RescueDepartment> existing = departmentRepository.findByStationChiefId(request.getStationChiefId());
+            if (!existing.isEmpty()) {
+                throw new IllegalArgumentException("Officer is already assigned as Station Chief to another rescue department: " + existing.get(0).getName());
+            }
+        }
+
+        UUID adminId = authorization.currentUserIdOrNull();
+        UUID governingOfficialId = request.getGoverningOfficialId() != null ? request.getGoverningOfficialId() : adminId;
+
         RescueDepartment department = RescueDepartment.builder()
                 .name(request.getName().trim())
                 .type(request.getType())
@@ -102,8 +113,9 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .totalCapacity(request.getTotalCapacity() != null ? request.getTotalCapacity() : 10)
                 .activeMissionsCount(0)
                 .isAvailable(true)
-                .districtAdminId(authorization.currentUserIdOrNull())
-                .governingOfficialId(request.getGoverningOfficialId())
+                .districtAdminId(adminId)
+                .governingOfficialId(governingOfficialId)
+                .stationChiefId(request.getStationChiefId())
                 .build();
 
         RescueDepartment saved = departmentRepository.save(department);
@@ -145,6 +157,17 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
         if (request.getGoverningOfficialId() != null) {
             dept.setGoverningOfficialId(request.getGoverningOfficialId());
+        } else if (dept.getGoverningOfficialId() == null && authorization.isDistrictAdmin()) {
+            dept.setGoverningOfficialId(authorization.currentUserIdOrNull());
+        }
+        if (request.getStationChiefId() != null) {
+            List<RescueDepartment> existing = departmentRepository.findByStationChiefId(request.getStationChiefId());
+            boolean assignedToOther = existing.stream().anyMatch(d -> !d.getId().equals(id));
+            if (assignedToOther) {
+                RescueDepartment conflict = existing.stream().filter(d -> !d.getId().equals(id)).findFirst().get();
+                throw new IllegalArgumentException("Officer is already assigned as Station Chief to another rescue department: " + conflict.getName());
+            }
+            dept.setStationChiefId(request.getStationChiefId());
         }
 
         RescueDepartment updated = departmentRepository.save(dept);
@@ -186,7 +209,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             return departmentRepository.findByDistrictAdminId(actorId).stream().map(this::mapToResponse).toList();
         }
         if (authorization.isGovernmentOfficial() && actorId != null) {
-            return departmentRepository.findByGoverningOfficialId(actorId).stream().map(this::mapToResponse).toList();
+            return departmentRepository.findByGoverningOfficialIdOrStationChiefId(actorId, actorId).stream().map(this::mapToResponse).toList();
         }
         if (authorization.isRescueTeam()) {
             return departmentRepository.findAll().stream()

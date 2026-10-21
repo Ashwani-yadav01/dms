@@ -12,6 +12,11 @@ import com.dms.userService.user.exception.BadRequestException;
 import com.dms.userService.user.repository.GovernmentRegistryRepository;
 import com.dms.userService.user.repository.GovernmentOfficialProfileRepository;
 import com.dms.userService.user.repository.HospitalRegistryRepository;
+import com.dms.userService.user.entity.DistrictAdminRegistryStatus;
+import com.dms.userService.user.entity.DistrictAdminProfile;
+import com.dms.userService.user.entity.DepartmentCategory;
+import com.dms.userService.user.repository.DistrictAdminRegistryRepository;
+import com.dms.userService.user.repository.DistrictAdminProfileRepository;
 import com.dms.userService.user.repository.RescueTeamProfileRepository;
 import com.dms.userService.user.exception.UserAlreadyExistsException;
 import com.dms.userService.user.repository.UserRepository;
@@ -43,6 +48,8 @@ public class AuthServiceImpl implements AuthService {
     private final GovernmentRegistryRepository governmentRegistryRepository;
     private final GovernmentOfficialProfileRepository governmentOfficialProfileRepository;
     private final HospitalRegistryRepository hospitalRegistryRepository;
+    private final DistrictAdminRegistryRepository districtAdminRegistryRepository;
+    private final DistrictAdminProfileRepository districtAdminProfileRepository;
     private final RescueTeamProfileRepository rescueTeamProfileRepository;
     @Override
     @Transactional
@@ -63,7 +70,15 @@ public class AuthServiceImpl implements AuthService {
                     .filter(record -> record.getHospitalPhone() == null || record.getHospitalPhone().equals(request.getMobileNumber().trim()))
                     .isPresent();
             if (!authorized) throw new BadRequestException("Hospital authorization failed. A valid hospital invitation code is required.");
-        } else if (request.getRole() == Role.DISTRICT_ADMIN || request.getRole() == Role.RESCUE_TEAM || request.getRole() == Role.SUPER_ADMIN) {
+        } else if (request.getRole() == Role.DISTRICT_ADMIN) {
+            boolean authorized = request.getAuthorizationCode() != null
+                    && districtAdminRegistryRepository.findByAuthorizationCode(request.getAuthorizationCode().trim().toUpperCase())
+                    .filter(record -> record.getStatus() == DistrictAdminRegistryStatus.ACTIVE)
+                    .filter(record -> record.getAdminEmail() == null || record.getAdminEmail().equalsIgnoreCase(request.getEmail().trim()))
+                    .filter(record -> record.getAdminPhone() == null || record.getAdminPhone().equals(request.getMobileNumber().trim()))
+                    .isPresent();
+            if (!authorized) throw new BadRequestException("District admin authorization failed. A valid district admin authorization code matching your email and phone is required.");
+        } else if (request.getRole() == Role.RESCUE_TEAM || request.getRole() == Role.SUPER_ADMIN) {
             throw new BadRequestException("This profile must be provisioned by an administrator.");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -84,12 +99,18 @@ public class AuthServiceImpl implements AuthService {
 
         User savedUser = userRepository.save(user);
 
-        // 3. Consume the hospital invitation so the code cannot be reused
+        // 3. Consume the hospital or district admin invitation so the code cannot be reused
         if (request.getRole() == Role.HOSPITAL && request.getAuthorizationCode() != null) {
             hospitalRegistryRepository.findByAuthorizationCode(request.getAuthorizationCode().trim().toUpperCase())
                     .ifPresent(registry -> {
                         registry.setStatus(HospitalRegistryStatus.CONSUMED);
                         hospitalRegistryRepository.save(registry);
+                    });
+        } else if (request.getRole() == Role.DISTRICT_ADMIN && request.getAuthorizationCode() != null) {
+            districtAdminRegistryRepository.findByAuthorizationCode(request.getAuthorizationCode().trim().toUpperCase())
+                    .ifPresent(registry -> {
+                        registry.setStatus(DistrictAdminRegistryStatus.CONSUMED);
+                        districtAdminRegistryRepository.save(registry);
                     });
         }
 
@@ -101,6 +122,12 @@ public class AuthServiceImpl implements AuthService {
         extraClaims.put("govVerified", false);
         extraClaims.put("rescueVerified", false);
         extraClaims.put("hospitalVerified", false);
+        districtAdminProfileRepository.findById(savedUser.getId()).ifPresent(profile -> {
+            if (profile.getDepartmentCategory() != null) {
+                extraClaims.put("departmentCategory", profile.getDepartmentCategory().name());
+            }
+            extraClaims.put("districtName", profile.getDistrictName());
+        });
 
         String jwtToken = jwtService.generateToken(extraClaims, userDetails);
 
@@ -141,6 +168,17 @@ public class AuthServiceImpl implements AuthService {
         rescueTeamProfileRepository.findById(user.getId()).ifPresent(profile -> {
             extraClaims.put("rescueVerified", Boolean.TRUE.equals(profile.getIsVerified()));
             extraClaims.put("rescueDepartmentId", profile.getDepartmentId() == null ? null : profile.getDepartmentId().toString());
+        });
+        districtAdminProfileRepository.findById(user.getId()).ifPresent(profile -> {
+            if (profile.getDepartmentCategory() != null) {
+                extraClaims.put("departmentCategory", profile.getDepartmentCategory().name());
+            }
+            if (profile.getDepartment() != null) {
+                extraClaims.put("departmentName", profile.getDepartment());
+            }
+            if (profile.getDistrictName() != null) {
+                extraClaims.put("districtName", profile.getDistrictName());
+            }
         });
 
         String jwtToken = jwtService.generateToken(extraClaims, userDetails);

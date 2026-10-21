@@ -23,6 +23,8 @@ public class GovernmentRegistry {
     private String employeeId;
     @Column(name = "department_name")
     private String departmentName;
+    @Column(name = "department_category", length = 40)
+    private String departmentCategory;
     @Column
     private String designation;
     @Enumerated(EnumType.STRING) @Column(name = "hierarchy_level", length = 30)
@@ -38,7 +40,7 @@ public class GovernmentRegistry {
     @Column(name = "office_longitude")
     private Double officeLongitude;
     @Column(name = "duty_radius_km", nullable = false)
-    private Double dutyRadiusKm = 20.0;
+    private Double dutyRadiusKm = 25.0;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16)
     private GovernmentRegistryStatus status = GovernmentRegistryStatus.ACTIVE;
     @CreationTimestamp @Column(nullable = false, updatable = false)
@@ -48,9 +50,6 @@ public class GovernmentRegistry {
 
     public boolean matches(GovernmentOfficialProfileRequest request) {
         return equal(employeeId, request.getEmployeeId())
-                && optionalEqual(departmentName, request.getDepartmentName())
-                && optionalEqual(designation, request.getDesignation())
-                && (hierarchyLevel == null || hierarchyLevel == request.getHierarchyLevel())
                 && equal(authorizationCode, request.getAuthorizationCode());
     }
     private boolean equal(String a, String b) { return a != null && b != null && a.trim().equalsIgnoreCase(b.trim()); }

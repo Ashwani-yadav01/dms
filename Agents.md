@@ -297,3 +297,78 @@ actual repository code
 ```
 
 Always read `TRACK.md` before beginning work.
+
+
+---
+
+# Minimal Engineering Rules (Ponytail-Inspired)
+
+## Core Principle
+
+Prefer the smallest correct, complete, and maintainable solution.
+
+Before adding code, ask:
+
+1. Does this functionality actually need to exist?
+2. Does the repository already implement it?
+3. Can existing code or a standard library solve the problem?
+4. Can the solution be simplified without sacrificing correctness, security, or reliability?
+
+Do not add code merely because it might be useful someday.
+
+## Avoid Unnecessary Complexity
+
+- Prefer modifying existing functions over creating new abstractions.
+- Do not create additional classes, interfaces, utilities, services, hooks, or components without a clear need.
+- Do not introduce dependencies when existing functionality is sufficient.
+- Do not duplicate business logic.
+- Do not refactor unrelated code during a bug fix.
+- Do not rewrite working code just to improve its style.
+- Do not add speculative features, fallback mechanisms, or configuration options without a demonstrated requirement.
+- Remove genuinely redundant code when it is safe to do so and within the approved task scope.
+
+## Root-Cause First
+
+Before proposing a fix:
+
+1. Reproduce or understand the reported problem.
+2. Trace the relevant execution flow.
+3. Identify the actual root cause using code, logs, configuration, and tests.
+4. Distinguish confirmed causes from assumptions.
+5. Choose the smallest change that addresses the root cause.
+6. Consider regressions and relevant edge cases.
+
+Do not hide errors, suppress exceptions, weaken validation, bypass authorization, or hardcode values just to make a symptom disappear.
+
+## Respect Existing Contracts
+
+- Preserve existing API contracts, database schemas, Kafka message formats, Redis key conventions, and authentication behavior unless the approved task requires a change.
+- Verify that referenced endpoints, methods, tables, topics, and components actually exist.
+- Prefer existing project patterns over introducing a new pattern for the same problem.
+- Avoid unrelated changes to dependencies, configuration, and architecture.
+
+## Scope Discipline
+
+- Implement only the current task.
+- Do not silently fix unrelated issues discovered during investigation.
+- Report unrelated problems separately and record important discoveries in TRACK.md.
+- If the requested approach is unnecessarily complex, explain a simpler alternative before implementation.
+- If requirements are unclear, clarify them rather than inventing behavior.
+
+## Verification
+
+- Run the narrowest relevant tests first.
+- Run broader tests or builds when appropriate and feasible.
+- Verify important edge cases and backward compatibility.
+- Report actual test results, including failures and tests that could not be run.
+- Never claim success without verification.
+
+## Backend Approval Takes Priority
+
+These minimal-engineering rules do NOT grant permission to modify backend files.
+
+The existing Backend Changes approval workflow remains mandatory. Investigate and propose the smallest suitable solution, list every intended backend file change, ask for explicit permission, and wait before editing.
+
+## Final Standard
+
+A good change solves the requested problem with the least unnecessary complexity while preserving correctness, security, reliability, and existing behavior.

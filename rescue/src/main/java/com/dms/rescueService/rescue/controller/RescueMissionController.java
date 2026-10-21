@@ -109,7 +109,7 @@ public class RescueMissionController {
         int victims = request.getVictimsRescued() != null ? request.getVictimsRescued() : 0;
 
         // Call the service method we just built with Kafka!
-        RescueMission mission = assignmentService.completeRescueMission(id, victims);
+        RescueMission mission = assignmentService.completeRescueMission(id, victims, request.getNotes());
 
         return ResponseEntity.ok(mapToResponse(mission));
     }

@@ -40,6 +40,8 @@ class GovernmentOfficialProfileServiceImplTest {
         assertTrue(response.getIsVerified());
         assertTrue(response.getGovernmentProfileId().matches("GOV-[0-9]{6}-[A-Z2-9]{6}"));
         assertEquals(response.getGovernmentProfileId(), registry.getGovernmentProfileId());
+        assertEquals(25.0, response.getDutyRadiusKm());
+        assertEquals(25.0, registry.getDutyRadiusKm());
     }
 
     @Test void profileCreationRejectsWrongCodeOrInactiveRegistry() {

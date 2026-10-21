@@ -16,9 +16,9 @@ import java.util.UUID;
 )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = CitizenProfileResponse.class, name = "CITIZEN"),
-        @JsonSubTypes.Type(value = VolunteerProfileResponse.class, name = "VOLUNTEER"),
-        @JsonSubTypes.Type(value = NGOProfileResponse.class, name = "NGO"),
-        @JsonSubTypes.Type(value = GovernmentOfficialProfileResponse.class, name = "GOVERNMENT_OFFICIAL")
+        @JsonSubTypes.Type(value = GovernmentOfficialProfileResponse.class, name = "GOVERNMENT_OFFICIAL"),
+        @JsonSubTypes.Type(value = RescueTeamProfileResponse.class, name = "RESCUE_TEAM"),
+        @JsonSubTypes.Type(value = DistrictAdminProfileResponse.class, name = "DISTRICT_ADMIN")
 })
 public abstract class UserProfileResponse {
     private UUID id;

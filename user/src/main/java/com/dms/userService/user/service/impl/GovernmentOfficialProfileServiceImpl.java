@@ -5,6 +5,7 @@ import com.dms.userService.user.dto.response.GovernmentOfficialProfileResponse;
 import com.dms.userService.user.entity.GovernmentOfficialProfile;
 import com.dms.userService.user.entity.OfficialStatus;
 import com.dms.userService.user.entity.User;
+import com.dms.userService.user.entity.DepartmentCategory;
 import com.dms.userService.user.entity.GovernmentRegistry;
 import com.dms.userService.user.entity.GovernmentRegistryStatus;
 import com.dms.userService.user.exception.BadRequestException;
@@ -74,15 +75,21 @@ public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialP
             profile.setReportsTo(supervisor);
         }
 
-        GovernmentRegistry registry = registryRepository.findByEmployeeId(request.getEmployeeId()).orElse(null);
+        GovernmentRegistry registry = registryRepository.findByEmployeeId(request.getEmployeeId())
+                .or(() -> registryRepository.findByAuthorizationCode(request.getAuthorizationCode()))
+                .or(() -> user.getEmail() != null ? registryRepository.findByOfficialEmailIgnoreCase(user.getEmail()) : java.util.Optional.empty())
+                .orElse(null);
         if (registry == null || registry.getStatus() != GovernmentRegistryStatus.ACTIVE
                 || !registry.matches(request)
                 || (registry.getOfficialEmail() != null && !registry.getOfficialEmail().equalsIgnoreCase(user.getEmail()))
-                || (registry.getOfficialPhone() != null && !registry.getOfficialPhone().equals(user.getMobileNumber()))) {
+                || !phoneMatches(registry.getOfficialPhone(), user.getMobileNumber())) {
             throw new BadRequestException("Government official verification failed.");
         }
         applyRegistryProfileDetails(registry, request);
         profile.setIsVerified(true);
+        if (registry.getDepartmentCategory() != null && !registry.getDepartmentCategory().isBlank()) {
+            profile.setDepartmentCategory(parseCategory(registry.getDepartmentCategory()));
+        }
         applyDutyArea(profile, registry);
         GovernmentOfficialProfile savedProfile = officialProfileRepository.save(profile);
         registry.setGovernmentProfileId(savedProfile.getGovernmentProfileId());
@@ -109,11 +116,14 @@ public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialP
                 || !same(profile.getDepartmentName(), request.getDepartmentName())
                 || !same(profile.getDesignation(), request.getDesignation())
                 || profile.getHierarchyLevel() != request.getHierarchyLevel();
-        GovernmentRegistry registry = registryRepository.findByEmployeeId(request.getEmployeeId()).orElse(null);
+        GovernmentRegistry registry = registryRepository.findByEmployeeId(request.getEmployeeId())
+                .or(() -> registryRepository.findByAuthorizationCode(request.getAuthorizationCode()))
+                .or(() -> profile.getUser().getEmail() != null ? registryRepository.findByOfficialEmailIgnoreCase(profile.getUser().getEmail()) : java.util.Optional.empty())
+                .orElse(null);
         if (registry == null || registry.getStatus() != GovernmentRegistryStatus.ACTIVE
                 || !registry.matches(request)
                 || (registry.getOfficialEmail() != null && !registry.getOfficialEmail().equalsIgnoreCase(profile.getUser().getEmail()))
-                || (registry.getOfficialPhone() != null && !registry.getOfficialPhone().equals(profile.getUser().getMobileNumber()))) {
+                || !phoneMatches(registry.getOfficialPhone(), profile.getUser().getMobileNumber())) {
             throw new BadRequestException("Government official verification failed.");
         }
 
@@ -133,11 +143,16 @@ public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialP
         // Official fields
         profile.setDepartmentName(request.getDepartmentName());
         profile.setDepartmentId(request.getDepartmentId());
-        profile.setDepartmentCategory(request.getDepartmentCategory());
+        if (registry.getDepartmentCategory() != null && !registry.getDepartmentCategory().isBlank()) {
+            profile.setDepartmentCategory(parseCategory(registry.getDepartmentCategory()));
+        } else if (request.getDepartmentCategory() != null) {
+            profile.setDepartmentCategory(request.getDepartmentCategory());
+        }
         profile.setDesignation(request.getDesignation());
         profile.setEmployeeId(request.getEmployeeId());
         profile.setOfficialPhone(request.getOfficialPhone());
         profile.setHierarchyLevel(request.getHierarchyLevel());
+        profile.setDutyRadiusKm(25.0);
         profile.setJurisdictionCode(request.getJurisdictionCode());
         applyRegistryProfileDetails(registry, request);
         applyDutyArea(profile, registry);
@@ -186,7 +201,7 @@ public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialP
         profile.setEmployeeId(request.getEmployeeId());
         profile.setOfficialPhone(request.getOfficialPhone());
         profile.setHierarchyLevel(request.getHierarchyLevel());
-        profile.setDutyRadiusKm(40.0);
+        profile.setDutyRadiusKm(25.0);
         profile.setJurisdictionCode(request.getJurisdictionCode());
         return profile;
     }
@@ -212,13 +227,29 @@ public class GovernmentOfficialProfileServiceImpl implements GovernmentOfficialP
         registry.setHierarchyLevel(request.getHierarchyLevel());
         registry.setOfficeLatitude(request.getLatitude());
         registry.setOfficeLongitude(request.getLongitude());
-        if (registry.getDutyRadiusKm() == null) registry.setDutyRadiusKm(20.0);
+        registry.setDutyRadiusKm(25.0);
     }
 
     private void applyDutyArea(GovernmentOfficialProfile profile, GovernmentRegistry registry) {
-        profile.setDutyOfficeLatitude(registry.getOfficeLatitude());
-        profile.setDutyOfficeLongitude(registry.getOfficeLongitude());
-        profile.setDutyRadiusKm(registry.getDutyRadiusKm());
+        profile.setDutyOfficeLatitude(registry.getOfficeLatitude() != null ? registry.getOfficeLatitude() : profile.getLatitude());
+        profile.setDutyOfficeLongitude(registry.getOfficeLongitude() != null ? registry.getOfficeLongitude() : profile.getLongitude());
+        profile.setDutyRadiusKm(25.0);
+    }
+
+    private boolean phoneMatches(String regPhone, String userPhone) {
+        if (regPhone == null || userPhone == null || regPhone.isBlank() || userPhone.isBlank()) return true;
+        String p1 = regPhone.replaceAll("[^0-9]", "");
+        String p2 = userPhone.replaceAll("[^0-9]", "");
+        return p1.endsWith(p2) || p2.endsWith(p1);
+    }
+
+    private DepartmentCategory parseCategory(String categoryStr) {
+        if (categoryStr == null || categoryStr.isBlank()) return DepartmentCategory.FIRE_SAFETY;
+        try {
+            return DepartmentCategory.valueOf(categoryStr.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return DepartmentCategory.FIRE_SAFETY;
+        }
     }
 
     // Helper: Entity -> Response DTO mapping

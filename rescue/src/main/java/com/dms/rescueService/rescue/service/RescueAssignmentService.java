@@ -37,5 +37,7 @@ public interface RescueAssignmentService {
      */
     RescueMission assignDepartmentToIncident(UUID incidentId, UUID departmentId, double incidentLat, double incidentLon);
 
- RescueMission completeRescueMission(UUID missionId, int victimsRescued);
+    RescueMission completeRescueMission(UUID missionId, int victimsRescued);
+
+    RescueMission completeRescueMission(UUID missionId, int victimsRescued, String notes);
 }

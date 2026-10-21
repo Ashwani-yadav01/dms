@@ -36,17 +36,17 @@ class RescueAuthorizationServiceTest {
     @Test void districtAdminCanOnlyManageOwnedDepartments() {
         UUID adminId = UUID.randomUUID();
         UUID otherAdminId = UUID.randomUUID();
-        RescueDepartment owned = new RescueDepartment();
-        owned.setId(departmentId);
-        owned.setDistrictAdminId(adminId);
+        RescueDepartment owned = RescueDepartment.builder().id(departmentId).districtAdminId(adminId).build();
+        RescueDepartment other = RescueDepartment.builder().id(UUID.randomUUID()).districtAdminId(otherAdminId).build();
 
-        RescueDepartment other = new RescueDepartment();
-        other.setId(UUID.randomUUID());
-        other.setDistrictAdminId(otherAdminId);
-
-        authenticateWithId(adminId, "DISTRICT_ADMIN", Map.of());
+        // 1. Scoped district admin (e.g. HEALTH category) can only manage owned department
+        authenticateWithId(adminId, "DISTRICT_ADMIN", Map.of("departmentCategory", "HEALTH"));
         assertDoesNotThrow(() -> authorization.requireDepartmentAdmin(owned));
         assertThrows(RescueAuthorizationException.class, () -> authorization.requireDepartmentAdmin(other));
+
+        // 2. Department Management District Admin can manage any department in district
+        authenticateWithId(adminId, "DISTRICT_ADMIN", Map.of("departmentCategory", "DEPARTMENT_MANAGEMENT"));
+        assertDoesNotThrow(() -> authorization.requireDepartmentAdmin(other));
 
         authenticate("SUPER_ADMIN", Map.of());
         assertDoesNotThrow(() -> authorization.requireDepartmentAdmin(other));
@@ -56,9 +56,10 @@ class RescueAuthorizationServiceTest {
         UUID officialId = UUID.randomUUID();
         UUID otherOfficialId = UUID.randomUUID();
 
-        RescueDepartment dept = new RescueDepartment();
-        dept.setId(departmentId);
-        dept.setGoverningOfficialId(officialId);
+        RescueDepartment dept = RescueDepartment.builder()
+                .id(departmentId)
+                .governingOfficialId(officialId)
+                .build();
 
         RescueMission mission = mission(departmentId);
         mission.getDepartment().setGoverningOfficialId(officialId);
@@ -72,9 +73,26 @@ class RescueAuthorizationServiceTest {
         assertThrows(RescueAuthorizationException.class, () -> authorization.requireMissionView(mission));
     }
 
+    @Test void stationChiefCanViewAndOperateMissions() {
+        UUID chiefId = UUID.randomUUID();
+        RescueDepartment dept = RescueDepartment.builder()
+                .id(departmentId)
+                .stationChiefId(chiefId)
+                .build();
+
+        RescueMission mission = mission(departmentId);
+        mission.getDepartment().setStationChiefId(chiefId);
+
+        authenticateWithId(chiefId, "GOVERNMENT_OFFICIAL", Map.of());
+        assertDoesNotThrow(() -> authorization.requireDepartmentView(dept));
+        assertDoesNotThrow(() -> authorization.requireMissionView(mission));
+        assertDoesNotThrow(() -> authorization.requireAssignedTeam(mission));
+    }
+
     private RescueMission mission(UUID departmentId) {
-        RescueDepartment department = new RescueDepartment(); department.setId(departmentId);
-        RescueMission mission = new RescueMission(); mission.setDepartment(department); return mission;
+        RescueDepartment department = RescueDepartment.builder().id(departmentId).build();
+        RescueMission mission = RescueMission.builder().department(department).build();
+        return mission;
     }
     private void authenticate(String role, Map<String, Object> claims) {
         authenticateWithId(UUID.randomUUID(), role, claims);

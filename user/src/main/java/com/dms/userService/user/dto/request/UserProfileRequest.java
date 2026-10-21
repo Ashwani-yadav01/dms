@@ -1,6 +1,7 @@
 package com.dms.userService.user.dto.request;
 
 import com.dms.userService.user.entity.Gender;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import jakarta.validation.constraints.NotBlank;
@@ -11,6 +12,7 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.PROPERTY,
@@ -18,10 +20,9 @@ import lombok.Setter;
 )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = CitizenProfileRequest.class, name = "CITIZEN"),
-        @JsonSubTypes.Type(value = VolunteerProfileRequest.class, name = "VOLUNTEER"),
-        @JsonSubTypes.Type(value = NGOProfileRequest.class, name = "NGO"),
         @JsonSubTypes.Type(value = GovernmentOfficialProfileRequest.class, name = "GOVERNMENT_OFFICIAL"),
-        @JsonSubTypes.Type(value = RescueTeamProfileRequest.class, name = "RESCUE_TEAM")
+        @JsonSubTypes.Type(value = RescueTeamProfileRequest.class, name = "RESCUE_TEAM"),
+        @JsonSubTypes.Type(value = DistrictAdminProfileRequest.class, name = "DISTRICT_ADMIN")
 })
 @Data
 public abstract class UserProfileRequest {

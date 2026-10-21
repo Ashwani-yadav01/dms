@@ -186,10 +186,17 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
 
         kafkaTemplate.send(rescueStatusTopic, mission.getIncidentId().toString(), statusEvent);
     }
+
     @Override
     @Transactional
     public RescueMission completeRescueMission(UUID missionId, int victimsRescued) {
-        log.info("Completing Rescue Mission ID: [{}] with {} victims extracted", missionId, victimsRescued);
+        return completeRescueMission(missionId, victimsRescued, null);
+    }
+
+    @Override
+    @Transactional
+    public RescueMission completeRescueMission(UUID missionId, int victimsRescued, String notes) {
+        log.info("Completing Rescue Mission ID: [{}] with {} victims extracted and notes: {}", missionId, victimsRescued, notes);
 
         // 1. Fetch and update mission
         RescueMission mission = missionRepository.findById(missionId)
@@ -197,7 +204,11 @@ public class RescueAssignmentServiceImpl implements RescueAssignmentService {
         authorization.requireAssignedTeam(mission);
 
         mission.setStatus(MissionStatus.COMPLETED);
-        mission.setNotes("Mission completed successfully. " + victimsRescued + " victims extracted and en route to hospital.");
+        String debrief = notes != null && !notes.isBlank() ? notes.trim() : "Mission completed successfully.";
+        String fullNotes = debrief.contains("Victims Saved")
+                ? debrief
+                : String.format("[Victims Saved: %d] %s", victimsRescued, debrief);
+        mission.setNotes(fullNotes);
         mission = missionRepository.save(mission);
 
         // 2. Free up Department Capacity

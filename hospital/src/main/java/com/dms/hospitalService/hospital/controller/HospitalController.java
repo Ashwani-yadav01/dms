@@ -246,12 +246,12 @@ public class HospitalController {
 
     private boolean isAuthorizedHospitalAdmin(HttpServletRequest request) {
         String role = request.getHeader("X-User-Role");
-        if ("SUPER_ADMIN".equals(role) || "DISTRICT_ADMIN".equals(role)) {
+        if ("SUPER_ADMIN".equals(role)) {
             return true;
         }
-        if ("GOVERNMENT_OFFICIAL".equals(role)) {
+        if ("DISTRICT_ADMIN".equals(role)) {
             String deptCategory = request.getHeader("X-User-Department-Category");
-            return "MEDICAL_RESPONSE".equals(deptCategory);
+            return "HOSPITAL_MANAGEMENT".equals(deptCategory) || "MEDICAL_MANAGEMENT".equals(deptCategory) || "MEDICAL_RESPONSE".equals(deptCategory) || deptCategory == null;
         }
         return false;
     }

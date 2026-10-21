@@ -60,9 +60,12 @@ public class IncidentAuthorizationService {
     }
     public boolean isOfficialAuthorizedForIncidentType(IncidentType type) {
         if (type == null) return false;
-        if (isDistrictOrSuperAdmin()) return true;
-        if (!"GOVERNMENT_OFFICIAL".equals(role())) return false;
         String deptCategory = claim("departmentCategory");
+        if (isDistrictOrSuperAdmin()) {
+            if (deptCategory == null || deptCategory.isBlank()) return true;
+            return IncidentDepartmentPolicy.isAuthorized(deptCategory, type);
+        }
+        if (!"GOVERNMENT_OFFICIAL".equals(role())) return false;
         return IncidentDepartmentPolicy.isAuthorized(deptCategory, type);
     }
     public void authorize(Incident incident, IncidentAction action) {
@@ -80,11 +83,14 @@ public class IncidentAuthorizationService {
         boolean allowed = switch (action) {
             case VIEW -> canView(incident);
             case UPDATE, DELETE -> ownerEditable;
-            case VERIFY, REJECT -> officialInRange
+            case VERIFY, REJECT -> isDistrictOrSuperAdmin()
                     && isOfficialAuthorizedForIncidentType(incident.getIncidentType())
                     && incident.getStatus() == com.dms.incident.entity.IncidentStatus.REPORTED;
             case ASSIGN_OFFICIAL -> false;
-            case RESOLVE -> assignedOfficial && incident.getStatus() == com.dms.incident.entity.IncidentStatus.DISPATCHED;
+            case RESOLVE -> (isDistrictOrSuperAdmin() || assignedOfficial || isAssignedRescueTeam(incident)
+                    || ("GOVERNMENT_OFFICIAL".equals(role()) && (claimTrue("govVerified") || isVerifiedOfficialIdentity())))
+                    && (incident.getStatus() == com.dms.incident.entity.IncidentStatus.DISPATCHED
+                        || incident.getStatus() == com.dms.incident.entity.IncidentStatus.VERIFIED);
             case CREATE -> false;
         };
         if (!allowed) deny();

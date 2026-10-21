@@ -67,12 +67,16 @@ public class GovernmentOfficialAdminController {
             throw new BadRequestException("An account already uses this mobile number.");
         if (registryRepository.existsByOfficialPhone(phone))
             throw new BadRequestException("An official profile already uses this mobile number.");
+        String category = request.getDepartmentCategory() != null && !request.getDepartmentCategory().isBlank()
+                ? request.getDepartmentCategory().trim().toUpperCase()
+                : "FIRE_SAFETY";
         GovernmentRegistry registry = new GovernmentRegistry();
         registry.setOfficialEmail(email);
         registry.setOfficialPhone(phone);
+        registry.setDepartmentCategory(category);
         registry.setEmployeeId(generateEmployeeId());
         registry.setAuthorizationCode(generateCode());
-        registry.setDutyRadiusKm(20.0);
+        registry.setDutyRadiusKm(25.0);
         registry.setStatus(GovernmentRegistryStatus.ACTIVE);
         return ResponseEntity.status(HttpStatus.CREATED).body(registryRepository.save(registry));
     }

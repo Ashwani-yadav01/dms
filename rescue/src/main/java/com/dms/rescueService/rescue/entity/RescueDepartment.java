@@ -47,6 +47,7 @@ public class RescueDepartment {
     @Column(name = "governing_official_id")
     private UUID governingOfficialId;
 
+    @Builder.Default
     @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
     private List<RescuePersonnel> personnelList = new ArrayList<>();
     @Column(nullable = false)

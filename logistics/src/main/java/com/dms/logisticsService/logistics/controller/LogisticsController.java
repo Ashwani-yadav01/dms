@@ -88,9 +88,7 @@ public class LogisticsController {
 
     private boolean canManageLogistics(String role) {
         return "DISTRICT_ADMIN".equals(role)
-                || "SUPER_ADMIN".equals(role)
-                || "GOVERNMENT_OFFICIAL".equals(role)
-                || "NGO".equals(role);
+                || "SUPER_ADMIN".equals(role);
     }
 
     private boolean canViewHospitalDispatches(String role) {

@@ -307,18 +307,17 @@ public class IncidentServiceImpl implements IncidentService {
     public IncidentResponse resolveIncident(UUID id, MultipartFile resolutionPhoto, String reason) {
         Incident incident = findIncidentEntityForUpdate(id);
         authorization.authorize(incident, IncidentAction.RESOLVE);
-        if (incident.getStatus() != IncidentStatus.DISPATCHED) {
-            throw new BadRequestException("Only dispatched incidents can be resolved.");
+        if (incident.getStatus() != IncidentStatus.DISPATCHED && incident.getStatus() != IncidentStatus.VERIFIED) {
+            throw new BadRequestException("Only active (verified or dispatched) incidents can be resolved.");
         }
         String cleanedReason = reason == null ? "" : reason.trim();
         if (cleanedReason.isBlank()) {
             throw new BadRequestException("A resolution reason is required.");
         }
-        if (resolutionPhoto == null || resolutionPhoto.isEmpty()) {
-            throw new BadRequestException("A resolution photo is required.");
-        }
         IncidentStatus previous = incident.getStatus();
-        incident.setResolutionPhotoUrl(cloudinaryImageService.upload(resolutionPhoto, "reliefops/resolutions"));
+        if (resolutionPhoto != null && !resolutionPhoto.isEmpty()) {
+            incident.setResolutionPhotoUrl(cloudinaryImageService.upload(resolutionPhoto, "reliefops/resolutions"));
+        }
         incident.setResolutionReason(cleanedReason);
         incident.setStatus(IncidentStatus.RESOLVED);
         Incident saved = repository.save(incident);
@@ -382,6 +381,16 @@ public class IncidentServiceImpl implements IncidentService {
             }
             incident.setStatus(IncidentStatus.DISPATCHED);
             if (departmentId != null) incident.setAssignedDepartmentId(departmentId);
+        } else if ("COMPLETED".equalsIgnoreCase(status) || "RESOLVED".equalsIgnoreCase(status)) {
+            incident.setStatus(IncidentStatus.RESOLVED);
+            if (notes != null && !notes.isBlank()) {
+                incident.setResolutionReason(notes.trim());
+            }
+        } else if ("CANCELLED".equalsIgnoreCase(status)) {
+            if (incident.getStatus() == IncidentStatus.DISPATCHED) {
+                incident.setStatus(IncidentStatus.VERIFIED);
+                incident.setAssignedDepartmentId(null);
+            }
         }
 
         if (notes != null && !notes.isBlank()) {
@@ -414,12 +423,17 @@ public class IncidentServiceImpl implements IncidentService {
             return;
         }
 
+        incident.setStatus(IncidentStatus.RESOLVED);
+        if (resolutionNotes != null && !resolutionNotes.isBlank()) {
+            incident.setResolutionReason(resolutionNotes.trim());
+        }
         String existingDescription = incident.getDescription() != null ? incident.getDescription() : "";
-        String noteSummary = String.format("\n[Rescue mission %s completed; awaiting official resolution]: %s",
+        String noteSummary = String.format("\n[Rescue mission %s completed]: %s",
                 missionId, resolutionNotes != null ? resolutionNotes : "Completed successfully.");
         incident.setDescription(existingDescription + noteSummary);
-        repository.save(incident);
-        log.info("Rescue mission completion recorded for incident {} without changing its resolution status.", incidentId);
+        Incident savedIncident = repository.save(incident);
+        audit(savedIncident, null, "RESCUE_MISSION_COMPLETED", incident.getStatus(), IncidentStatus.RESOLVED);
+        log.info("Rescue mission completion recorded for incident {} and status transitioned to RESOLVED.", incidentId);
     }
 
     private Incident findIncidentEntityById(UUID id) {

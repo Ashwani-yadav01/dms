@@ -47,7 +47,7 @@ class IncidentAuthorizationServiceTest {
         assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(unassigned));
     }
 
-    @Test void anyVerifiedOfficialInTheirDutyAreaCanVerifyWithoutAssignment() {
+    @Test void governmentOfficialCannotVerifyReportedIncidents() {
         Incident nearby = incident(citizen, null, null, IncidentStatus.REPORTED);
         nearby.setIncidentType(IncidentType.FLOOD);
         nearby.setLatitude(26.9); nearby.setLongitude(80.9);
@@ -55,82 +55,33 @@ class IncidentAuthorizationServiceTest {
                 "departmentCategory", "DISASTER_RESCUE",
                 "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
         authenticate(official, "GOVERNMENT_OFFICIAL", claims);
-        assertDoesNotThrow(() -> authorization.requireOfficialAssignment(nearby));
-
-        Incident outside = incident(citizen, null, null, IncidentStatus.REPORTED);
-        outside.setIncidentType(IncidentType.FLOOD);
-        outside.setLatitude(27.2); outside.setLongitude(81.5);
-        assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(outside));
-
-        authenticate(official, "GOVERNMENT_OFFICIAL", Map.of("govVerified", false, "officialStatus", "AVAILABLE",
-                "departmentCategory", "DISASTER_RESCUE",
-                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0));
         assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(nearby));
-    }
 
-    @Test void explicitAssignmentDoesNotLetOfficialActOutsideDutyArea() {
-        authenticate(official, "GOVERNMENT_OFFICIAL", Map.of("govVerified", true,
-                "departmentCategory", "DISASTER_RESCUE",
-                "officialLatitude", 0.0, "officialLongitude", 0.0, "officialDutyRadiusKm", 25.0,
-                "officialStatus", "AVAILABLE"));
-        Incident distant = incident(citizen, null, null, IncidentStatus.REPORTED);
-        distant.setIncidentType(IncidentType.FLOOD);
-        distant.setLatitude(1.0); distant.setLongitude(1.0);
-        assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(distant));
-        distant.setAssignedOfficialId(official);
-        assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(distant));
-    }
-
-    @Test void fireOfficialCannotVerifyFloodIncident() {
-        Incident flood = incident(citizen, null, null, IncidentStatus.REPORTED);
-        flood.setIncidentType(IncidentType.FLOOD);
-        flood.setLatitude(26.9); flood.setLongitude(80.9);
-
-        Map<String, Object> claims = Map.of("govVerified", true, "officialStatus", "AVAILABLE",
-                "departmentCategory", "FIRE_SAFETY",
-                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
-        authenticate(official, "GOVERNMENT_OFFICIAL", claims);
-
-        assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(flood));
-    }
-
-    @Test void fireOfficialCanVerifyFireIncident() {
         Incident fire = incident(citizen, null, null, IncidentStatus.REPORTED);
         fire.setIncidentType(IncidentType.FIRE);
         fire.setLatitude(26.9); fire.setLongitude(80.9);
-
-        Map<String, Object> claims = Map.of("govVerified", true, "officialStatus", "AVAILABLE",
+        authenticate(official, "GOVERNMENT_OFFICIAL", Map.of("govVerified", true, "officialStatus", "AVAILABLE",
                 "departmentCategory", "FIRE_SAFETY",
-                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
-        authenticate(official, "GOVERNMENT_OFFICIAL", claims);
-
-        assertDoesNotThrow(() -> authorization.requireOfficialAssignment(fire));
-    }
-
-    @Test void disasterOfficialCanVerifyFloodIncidentApproach1() {
-        Incident flood = incident(citizen, null, null, IncidentStatus.REPORTED);
-        flood.setIncidentType(IncidentType.FLOOD);
-        flood.setLatitude(26.9); flood.setLongitude(80.9);
-
-        Map<String, Object> claims = Map.of("govVerified", true, "officialStatus", "AVAILABLE",
-                "departmentCategory", "DISASTER_RESCUE",
-                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
-        authenticate(official, "GOVERNMENT_OFFICIAL", claims);
-
-        assertDoesNotThrow(() -> authorization.requireOfficialAssignment(flood));
-    }
-
-    @Test void disasterOfficialCannotVerifyFireIncident() {
-        Incident fire = incident(citizen, null, null, IncidentStatus.REPORTED);
-        fire.setIncidentType(IncidentType.FIRE);
-        fire.setLatitude(26.9); fire.setLongitude(80.9);
-
-        Map<String, Object> claims = Map.of("govVerified", true, "officialStatus", "AVAILABLE",
-                "departmentCategory", "DISASTER_RESCUE",
-                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
-        authenticate(official, "GOVERNMENT_OFFICIAL", claims);
-
+                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0));
         assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(fire));
+    }
+
+    @Test void governmentOfficialCanResolveDispatchedAndVerifiedIncidents() {
+        Incident dispatched = incident(citizen, null, null, IncidentStatus.DISPATCHED);
+        Map<String, Object> claims = Map.of("govVerified", true, "officialStatus", "AVAILABLE",
+                "departmentCategory", "FIRE_SAFETY",
+                "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
+        authenticate(official, "GOVERNMENT_OFFICIAL", claims);
+        assertDoesNotThrow(() -> authorization.requireOfficialAssignment(dispatched));
+
+        Incident verified = incident(citizen, null, null, IncidentStatus.VERIFIED);
+        assertDoesNotThrow(() -> authorization.authorize(verified, com.dms.incident.entity.IncidentAction.RESOLVE));
+    }
+
+    @Test void unverifiedGovernmentOfficialCannotResolveIncident() {
+        Incident dispatched = incident(citizen, null, null, IncidentStatus.DISPATCHED);
+        authenticate(official, "GOVERNMENT_OFFICIAL", Map.of("govVerified", false, "officialStatus", "OFFLINE"));
+        assertThrows(IncidentAuthorizationException.class, () -> authorization.requireOfficialAssignment(dispatched));
     }
 
     @Test void adminCanVerifyAnyIncidentRegardlessOfDepartmentOrLocation() {

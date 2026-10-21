@@ -87,7 +87,7 @@ public class InventoryController {
         }
         if ("GOVERNMENT_OFFICIAL".equals(role)) {
             String deptCategory = request.getHeader("X-User-Department-Category");
-            return "MEDICAL_RESPONSE".equals(deptCategory);
+            return "MEDICAL_RESPONSE".equals(deptCategory) || "MEDICAL_MANAGEMENT".equals(deptCategory) || "HOSPITAL_MANAGEMENT".equals(deptCategory);
         }
         return false;
     }

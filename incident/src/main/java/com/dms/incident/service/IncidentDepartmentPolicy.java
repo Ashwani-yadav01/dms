@@ -13,13 +13,13 @@ public final class IncidentDepartmentPolicy {
     private static final Map<IncidentType, Set<String>> TYPE_TO_DEPARTMENTS = new EnumMap<>(IncidentType.class);
 
     static {
-        // Flood response belongs to the Disaster Management Department (DISASTER_RESCUE)
-        TYPE_TO_DEPARTMENTS.put(IncidentType.FLOOD, Set.of("DISASTER_RESCUE"));
-        TYPE_TO_DEPARTMENTS.put(IncidentType.FIRE, Set.of("FIRE_SAFETY"));
-        TYPE_TO_DEPARTMENTS.put(IncidentType.COLLAPSE, Set.of("DISASTER_RESCUE", "INFRASTRUCTURE_REPAIR", "FIRE_SAFETY"));
-        TYPE_TO_DEPARTMENTS.put(IncidentType.MEDICAL, Set.of("MEDICAL_RESPONSE"));
-        TYPE_TO_DEPARTMENTS.put(IncidentType.HAZMAT, Set.of("FIRE_SAFETY", "DISASTER_RESCUE"));
-        TYPE_TO_DEPARTMENTS.put(IncidentType.OTHER, Set.of("DISASTER_RESCUE", "REVENUE_RELIEF", "OTHER"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.FIRE, Set.of("FIRE_SAFETY", "DEPARTMENT_MANAGEMENT"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.HAZMAT, Set.of("FIRE_SAFETY", "DEPARTMENT_MANAGEMENT"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.FLOOD, Set.of("DISASTER_MANAGEMENT", "DISASTER_RESCUE", "DEPARTMENT_MANAGEMENT"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.COLLAPSE, Set.of("DISASTER_MANAGEMENT", "DISASTER_RESCUE", "DEPARTMENT_MANAGEMENT"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.ACCIDENT, Set.of("ACCIDENT", "DEPARTMENT_MANAGEMENT"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.MEDICAL, Set.of("MEDICAL_RESPONSE", "MEDICAL_MANAGEMENT", "HOSPITAL_MANAGEMENT", "DEPARTMENT_MANAGEMENT"));
+        TYPE_TO_DEPARTMENTS.put(IncidentType.OTHER, Set.of("DISASTER_MANAGEMENT", "DISASTER_RESCUE", "DEPARTMENT_MANAGEMENT", "OTHER"));
     }
 
     private IncidentDepartmentPolicy() {}

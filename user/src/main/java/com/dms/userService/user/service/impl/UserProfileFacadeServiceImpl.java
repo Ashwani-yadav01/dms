@@ -25,10 +25,9 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
 
     // Role-specific sub-services
     private final CitizenProfileService citizenProfileService;
-    private final VolunteerProfileService volunteerProfileService;
-    private final NGOProfileService ngoProfileService;
     private final GovernmentOfficialProfileService governmentOfficialProfileService;
     private final RescueTeamProfileService rescueTeamProfileService;
+    private final DistrictAdminProfileService districtAdminProfileService;
     private final UserLocationRedisGeoService userLocationGeoService;
 
     @Override
@@ -56,14 +55,12 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
         // Delegate retrieval based on which subtype exists in DB
         if (citizenProfileService.existsById(userId)) {
             return citizenProfileService.getProfile(userId);
-        } else if (volunteerProfileService.existsById(userId)) {
-            return volunteerProfileService.getProfile(userId);
-        } else if (ngoProfileService.existsById(userId)) {
-            return ngoProfileService.getProfile(userId);
         } else if (governmentOfficialProfileService.existsById(userId)) {
             return governmentOfficialProfileService.getProfile(userId);
         } else if (rescueTeamProfileService.existsById(userId)) {
             return rescueTeamProfileService.getProfile(userId);
+        } else if (districtAdminProfileService.existsById(userId)) {
+            return districtAdminProfileService.getProfile(userId);
         }
 
         throw new UserNotFoundException("No specific profile role found for user ID: " + userId);
@@ -105,14 +102,12 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
         // Sub-services handle cascading or cleaning up specific relations before deletion
         if (citizenProfileService.existsById(userId)) {
             citizenProfileService.deleteProfile(userId);
-        } else if (volunteerProfileService.existsById(userId)) {
-            volunteerProfileService.deleteProfile(userId);
-        } else if (ngoProfileService.existsById(userId)) {
-            ngoProfileService.deleteProfile(userId);
         } else if (governmentOfficialProfileService.existsById(userId)) {
             governmentOfficialProfileService.deleteProfile(userId);
         } else if (rescueTeamProfileService.existsById(userId)) {
             rescueTeamProfileService.deleteProfile(userId);
+        } else if (districtAdminProfileService.existsById(userId)) {
+            districtAdminProfileService.deleteProfile(userId);
         } else {
             userProfileRepository.deleteById(userId);
         }
@@ -131,10 +126,9 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
     private UserProfileResponse delegateToRoleServiceCreate(UUID userId, UserProfileRequest request) {
         return switch (request) {
             case CitizenProfileRequest req -> citizenProfileService.createProfile(userId, req);
-            case VolunteerProfileRequest req -> volunteerProfileService.createProfile(userId, req);
-            case NGOProfileRequest req -> ngoProfileService.createProfile(userId, req);
             case GovernmentOfficialProfileRequest req -> governmentOfficialProfileService.createProfile(userId, req);
             case RescueTeamProfileRequest req -> rescueTeamProfileService.createProfile(userId, req);
+            case DistrictAdminProfileRequest req -> districtAdminProfileService.createProfile(userId, req);
             default -> throw new BadRequestException("Unsupported profile type: " + request.getClass().getSimpleName());
         };
     }
@@ -143,10 +137,9 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
     private UserProfileResponse delegateToRoleServiceUpdate(UUID userId, UserProfileRequest request) {
         return switch (request) {
             case CitizenProfileRequest req -> citizenProfileService.updateProfile(userId, req);
-            case VolunteerProfileRequest req -> volunteerProfileService.updateProfile(userId, req);
-            case NGOProfileRequest req -> ngoProfileService.updateProfile(userId, req);
             case GovernmentOfficialProfileRequest req -> governmentOfficialProfileService.updateProfile(userId, req);
             case RescueTeamProfileRequest req -> rescueTeamProfileService.updateProfile(userId, req);
+            case DistrictAdminProfileRequest req -> districtAdminProfileService.updateProfile(userId, req);
             default -> throw new BadRequestException("Unsupported profile type: " + request.getClass().getSimpleName());
         };
     }
@@ -157,10 +150,9 @@ public class UserProfileFacadeServiceImpl implements UserProfileFacadeService {
                 .getRole();
         boolean matches = switch (role) {
             case CITIZEN -> request instanceof CitizenProfileRequest;
-            case VOLUNTEER -> request instanceof VolunteerProfileRequest;
-            case NGO -> request instanceof NGOProfileRequest;
             case GOVERNMENT_OFFICIAL -> request instanceof GovernmentOfficialProfileRequest;
             case RESCUE_TEAM -> request instanceof RescueTeamProfileRequest;
+            case DISTRICT_ADMIN -> request instanceof DistrictAdminProfileRequest;
             default -> false;
         };
         if (!matches) throw new BadRequestException("Profile type does not match the authenticated account role.");

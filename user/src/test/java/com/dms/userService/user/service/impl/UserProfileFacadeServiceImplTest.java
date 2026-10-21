@@ -22,10 +22,10 @@ class UserProfileFacadeServiceImplTest {
     @Mock UserProfileRepository userProfileRepository;
     @Mock UserRepository userRepository;
     @Mock CitizenProfileService citizenProfileService;
-    @Mock VolunteerProfileService volunteerProfileService;
-    @Mock NGOProfileService ngoProfileService;
     @Mock GovernmentOfficialProfileService governmentOfficialProfileService;
     @Mock RescueTeamProfileService rescueTeamProfileService;
+    @Mock DistrictAdminProfileService districtAdminProfileService;
+    @Mock UserLocationRedisGeoService userLocationGeoService;
     @InjectMocks UserProfileFacadeServiceImpl facade;
 
     @Test void rejectsProfileTypeThatDoesNotMatchPersistedRole() {

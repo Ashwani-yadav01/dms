@@ -137,7 +137,7 @@ public class IncidentController {
     @PostMapping(path = "/{id}/resolve", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<IncidentResponse> resolveIncident(
             @PathVariable UUID id,
-            @RequestPart("photo") MultipartFile photo,
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
             @RequestParam("reason") String reason
     ) {
         return ResponseEntity.ok(incidentService.resolveIncident(id, photo, reason));

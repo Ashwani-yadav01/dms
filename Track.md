@@ -897,14 +897,85 @@ DMS is an enterprise-grade disaster coordination platform consisting of a Spring
 
 ---
 
+### Task 45: Incident Service Road Accident Type Check Constraint Fix
+- **Problem**:
+  - Reporting an incident with `incidentType: "ACCIDENT"` threw HTTP 500 Internal Server Error: `could not execute statement [ERROR: new row for relation "tbl_incidents" violates check constraint "tbl_incidents_incident_type_check"]`.
+  - The PostgreSQL check constraint on `tbl_incidents` did not include the `ACCIDENT` enum value.
+- **Status**: IMPLEMENTED & TESTED
+- **What was changed**:
+  - Created Flyway migration `V4__update_incident_type_check_constraint.sql` in `incident-service` dropping the old check constraint and recreating it with `('FLOOD', 'FIRE', 'COLLAPSE', 'MEDICAL', 'ACCIDENT', 'HAZMAT', 'OTHER')`.
+  - Updated check constraint on PostgreSQL `incident_db`.
+- **Files changed**:
+  - `incident/src/main/resources/db/migration/V4__update_incident_type_check_constraint.sql` (created)
+  - PostgreSQL `incident_db` (`tbl_incidents_incident_type_check`)
+- **Testing performed**:
+  - `incident`: `mvn test` -> **BUILD SUCCESS** (10 tests passed, 0 failures, 0 errors).
+- **Result**: PASSED.
+
+---
+
+### Task 46: Option C Incident Verification Domain Consolidation, Government Official Provisioning, Station Coordinates & Citizen Direct Rescue Calling
+- **Problem**:
+  1. District Admin & Government Official verification scoping was fragmented across mismatched categories. Standardized under Option C domain consolidation:
+     - `FIRE_SAFETY`: verifies `FIRE` & `HAZMAT` (combustible chemical/toxic gas leaks).
+     - `DISASTER_MANAGEMENT`: verifies `FLOOD` & `COLLAPSE` (inundations, landslides & structural failure).
+     - `ACCIDENT`: verifies `ACCIDENT` (road/transit vehicle collisions).
+     - `MEDICAL_RESPONSE`: verifies `MEDICAL` (medical emergencies & casualty care).
+     - `MEDICAL_MANAGEMENT`: handles hospital regulation, demand queue, and central district reserves.
+     - `DEPARTMENT_MANAGEMENT`: universal fallback verifier.
+  2. Super Admin provisioned Government Officials with only generic employee IDs and codes without binding their `departmentCategory`.
+  3. Government Official profile contained clutter and editable fields that conflicted with official registry assignment; needed streamlined profile keeping physical demographics and locking official credentials to the assigned department category.
+  4. Station creation and editing on `/admin` relied exclusively on browser GPS capture without manual numeric coordinate input fields.
+  5. Citizens viewing dispatched incidents could not directly call the dispatched rescue station.
+- **Status**: IMPLEMENTED & TESTED (Full-Stack)
+- **What was changed**:
+  - **Backend (`user-service`)**:
+    - Created `V11__add_department_category_to_government_registry.sql` adding `department_category VARCHAR(40)` to `government_registry`.
+    - Applied schema update to PostgreSQL `userDb`.
+    - Updated `GovernmentRegistry.java` with `departmentCategory` field mapping.
+    - Updated `CreateGovernmentOfficialRequest.java` with `departmentCategory` field and constructors.
+    - Updated `GovernmentOfficialAdminController.java` to persist `departmentCategory` during provisioning and set fixed 25.0km duty radius.
+    - Updated `GovernmentOfficialProfileServiceImpl.java` to lock `departmentCategory` from registry into official profiles during registration/update and imported `DepartmentCategory`.
+  - **Backend (`incident-service`)**:
+    - Updated `IncidentDepartmentPolicy.java` to enforce Option C domain mappings: `FIRE` & `HAZMAT` -> `FIRE_SAFETY`, `FLOOD` & `COLLAPSE` -> `DISASTER_MANAGEMENT`, `ACCIDENT` -> `ACCIDENT`, `MEDICAL` -> `MEDICAL_RESPONSE`.
+  - **Frontend (`dmsFrontend`)**:
+    - Updated `SuperAdmin.jsx`: Added `departmentCategory` selector to Government Official provisioning form and added "Department Category" badge column to the Officials table.
+    - Updated `Profile.jsx`: Streamlined Government Official profile: locked assigned department category as read-only badge, cleaned credentials card, removed unneeded inputs.
+    - Updated `Admin.jsx`: Replaced forced browser GPS with explicit numerical input fields for Latitude (`-90` to `90`) and Longitude (`-180` to `180`) in both station creation and edit modals, keeping GPS as a reference helper button.
+    - Updated `Incidents.jsx`: Added direct one-tap call button (`tel:...`) with `PhoneCall` icon next to assigned rescue station contact number on citizen incident cards.
+    - Updated `ReportIncident.jsx`: Updated `TYPES` labels to reflect Option C merged domains (*Fire Outbreak / Gas & Chemical Hazard (Hazmat)*, *Flood / Landslide & Structural Collapse*, *Road Accident / Highway Vehicle Collision*, *Medical Emergency / Casualty Care*).
+    - Updated `roles.js`: Updated `canVerifyIncidentType` and `getIncidentTypesForCategory` to align with Option C domain mappings.
+- **Files changed**:
+  - `incident/src/main/resources/db/migration/V4__update_incident_type_check_constraint.sql` (created)
+  - `user/src/main/resources/db/migration/V11__add_department_category_to_government_registry.sql` (created)
+  - `user/src/main/java/com/dms/userService/user/entity/GovernmentRegistry.java`
+  - `user/src/main/java/com/dms/userService/user/dto/request/CreateGovernmentOfficialRequest.java`
+  - `user/src/main/java/com/dms/userService/user/controller/GovernmentOfficialAdminController.java`
+  - `user/src/main/java/com/dms/userService/user/service/impl/GovernmentOfficialProfileServiceImpl.java`
+  - `incident/src/main/java/com/dms/incident/service/IncidentDepartmentPolicy.java`
+  - `dmsFrontend/src/pages/SuperAdmin.jsx`
+  - `dmsFrontend/src/pages/Profile.jsx`
+  - `dmsFrontend/src/pages/Admin.jsx`
+  - `dmsFrontend/src/pages/Incidents.jsx`
+  - `dmsFrontend/src/pages/ReportIncident.jsx`
+  - `dmsFrontend/src/auth/roles.js`
+- **Testing performed**:
+  - `user`: `mvn test` -> **BUILD SUCCESS** (9 tests passed, 0 failures, 0 errors).
+  - `incident`: `mvn test` -> **BUILD SUCCESS** (10 tests passed, 0 failures, 0 errors).
+  - `rescue`: `mvn clean test -Dtest=RescueAuthorizationServiceTest` -> **BUILD SUCCESS** (5 tests passed, 0 failures, 0 errors).
+  - `dmsFrontend`: `npm run build` -> **BUILD SUCCESS** (1,686 modules transformed, 0 syntax/bundling errors, bundled in 5.56s).
+- **Result**: PASSED.
+
+---
+
 ## Remaining Work & Status
-- **Current Status**: All Architectural Phases (Phase 1 through Phase 4), Hospital Operational Flows (Task 24), Patient Triage & Incident Feed Overhaul (Task 25), and Patient Admission Constraint Fix (Task 26) are **FULLY IMPLEMENTED & TESTED** across all microservices and frontend!
-  - Task 21: Rescue Team District Ownership, Government Official Linkage & Mission Command Integration — **IMPLEMENTED & TESTED**
-  - Task 22: Hospital Patient Admissions & Clinical Intake Overhaul — **IMPLEMENTED & TESTED**
-  - Task 23: Two-Stage Supply Chain & Delivery Confirmation (Logistics to Hospital Service integration) — **IMPLEMENTED & TESTED**
-  - Task 24: Hospital Facility Profile, Role-Scoped Navigation & Clinical Operations Workspace — **IMPLEMENTED & TESTED**
-  - Task 25: Patient Admission Triage Overhaul (Fillable Mass Incident Cause, Contact & Aadhaar IDs, and Hospital Incident Triage Feed) — **IMPLEMENTED & TESTED**
-  - Task 26: Patient Admission Database Constraint Fix (Nullable incident_id) — **IMPLEMENTED & TESTED**
+- **Current Status**: Task 45 & Task 46 are **FULLY IMPLEMENTED & TESTED** across all microservices and frontend!
+  - Option C domain consolidation is active and consistent across District Admin and Government Official verification rules.
+  - Super Admin can provision Government Officials with department categories (`FIRE_SAFETY`, `DISASTER_MANAGEMENT`, `ACCIDENT`, `MEDICAL_RESPONSE`, `DEPARTMENT_MANAGEMENT`).
+  - Government Official profile is streamlined with demographic details and locked official credentials.
+  - Station creation and editing supports explicit numeric coordinates.
+  - Citizens have direct 1-tap phone calling for dispatched rescue units.
+
 
 
 

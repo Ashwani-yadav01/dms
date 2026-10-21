@@ -98,9 +98,9 @@ public class GovernmentOfficialController {
     // --- ALLOCATION ELIGIBILITY LOOKUP ---
     @GetMapping("/eligible")
     public ResponseEntity<List<GovernmentOfficialProfileResponse>> findEligibleOfficials(
-            @RequestParam OfficialStatus status,
+            @RequestParam(required = false, defaultValue = "AVAILABLE") OfficialStatus status,
             @RequestParam DepartmentCategory category,
-            @RequestParam HierarchyLevel level) {
+            @RequestParam(required = false) HierarchyLevel level) {
         return ResponseEntity.ok(officialDomainService.findEligibleOfficials(status, category, level));
     }
 }

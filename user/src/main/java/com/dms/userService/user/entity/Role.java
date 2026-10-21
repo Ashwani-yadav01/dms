@@ -2,8 +2,6 @@ package com.dms.userService.user.entity;
 
 public enum Role {
     CITIZEN,
-    VOLUNTEER,
-    NGO,
     GOVERNMENT_OFFICIAL,
     SUPER_ADMIN,
     DISTRICT_ADMIN,     // Administrative authority for registering rescue departments & assigning staff

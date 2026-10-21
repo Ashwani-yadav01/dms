@@ -11,13 +11,26 @@ import java.util.UUID;
 @Service
 public class RescueAuthorizationService {
     public void requireDispatcher() {
-        if (!"DISTRICT_ADMIN".equals(role()) && !"SUPER_ADMIN".equals(role())) deny();
+        if ("SUPER_ADMIN".equals(role())) return;
+        if ("DISTRICT_ADMIN".equals(role())) {
+            String cat = claim("departmentCategory");
+            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat)
+                    || "DISASTER_MANAGEMENT".equals(cat) || "ACCIDENT".equals(cat) || "FIRE_SAFETY".equals(cat)) {
+                return;
+            }
+        }
+        deny();
     }
     public UUID currentUserIdOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof UUID id ? id : null;
     }
     public void requireAssignedTeam(RescueMission mission) {
+        UUID actorId = currentUserIdOrNull();
+        if (actorId != null && mission.getDepartment().getStationChiefId() != null
+                && mission.getDepartment().getStationChiefId().equals(actorId)) {
+            return;
+        }
         String departmentId = claim("rescueDepartmentId");
         if (!"RESCUE_TEAM".equals(role()) || !claimTrue("rescueVerified") || departmentId == null
                 || !mission.getDepartment().getId().toString().equals(departmentId)) deny();
@@ -29,6 +42,10 @@ public class RescueAuthorizationService {
     public void requireDepartmentAdmin(com.dms.rescueService.rescue.entity.RescueDepartment dept) {
         if ("SUPER_ADMIN".equals(role())) return;
         if ("DISTRICT_ADMIN".equals(role())) {
+            String cat = claim("departmentCategory");
+            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat) || "DISASTER_MANAGEMENT".equals(cat)) {
+                return;
+            }
             UUID actorId = currentUserIdOrNull();
             if (actorId != null && dept.getDistrictAdminId() != null && dept.getDistrictAdminId().equals(actorId)) {
                 return;
@@ -40,12 +57,17 @@ public class RescueAuthorizationService {
         if ("SUPER_ADMIN".equals(role())) return;
         UUID actorId = currentUserIdOrNull();
         if ("DISTRICT_ADMIN".equals(role())) {
+            String cat = claim("departmentCategory");
+            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat) || "DISASTER_MANAGEMENT".equals(cat)) {
+                return;
+            }
             if (actorId != null && dept.getDistrictAdminId() != null && dept.getDistrictAdminId().equals(actorId)) {
                 return;
             }
         }
         if ("GOVERNMENT_OFFICIAL".equals(role())) {
-            if (actorId != null && dept.getGoverningOfficialId() != null && dept.getGoverningOfficialId().equals(actorId)) {
+            if (actorId != null && ((dept.getGoverningOfficialId() != null && dept.getGoverningOfficialId().equals(actorId))
+                    || (dept.getStationChiefId() != null && dept.getStationChiefId().equals(actorId)))) {
                 return;
             }
         }
@@ -59,14 +81,20 @@ public class RescueAuthorizationService {
         if ("SUPER_ADMIN".equals(role())) return;
         UUID actorId = currentUserIdOrNull();
         if ("DISTRICT_ADMIN".equals(role())) {
+            String cat = claim("departmentCategory");
+            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat)) {
+                return;
+            }
             if (actorId != null && mission.getDepartment().getDistrictAdminId() != null
                     && mission.getDepartment().getDistrictAdminId().equals(actorId)) {
                 return;
             }
         }
         if ("GOVERNMENT_OFFICIAL".equals(role())) {
-            if (actorId != null && mission.getDepartment().getGoverningOfficialId() != null
-                    && mission.getDepartment().getGoverningOfficialId().equals(actorId)) {
+            if (actorId != null && ((mission.getDepartment().getGoverningOfficialId() != null
+                    && mission.getDepartment().getGoverningOfficialId().equals(actorId))
+                    || (mission.getDepartment().getStationChiefId() != null
+                    && mission.getDepartment().getStationChiefId().equals(actorId)))) {
                 return;
             }
         }

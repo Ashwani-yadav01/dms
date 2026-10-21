@@ -32,4 +32,5 @@ public class DepartmentCreateRequest {
     private Integer totalCapacity;
 
     private java.util.UUID governingOfficialId;
+    private java.util.UUID stationChiefId;
 }

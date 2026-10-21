@@ -20,4 +20,5 @@ public class DepartmentUpdateRequest {
     private Boolean isAvailable;
 
     private java.util.UUID governingOfficialId;
+    private java.util.UUID stationChiefId;
 }

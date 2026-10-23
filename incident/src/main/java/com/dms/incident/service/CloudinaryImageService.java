@@ -2,7 +2,9 @@ package com.dms.incident.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,12 +15,14 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CloudinaryImageService {
 
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
 
     private final Cloudinary cloudinary;
 
+    @CircuitBreaker(name = "cloudinaryClient", fallbackMethod = "uploadFallback")
     public String upload(MultipartFile file, String folder) {
 
         // -----------------------------
@@ -52,19 +56,13 @@ public class CloudinaryImageService {
         // -----------------------------
         // Debug information
         // -----------------------------
-        System.out.println("========== CLOUDINARY UPLOAD ==========");
-        System.out.println("Filename      : " + file.getOriginalFilename());
-        System.out.println("Size          : " + file.getSize() + " bytes");
-        System.out.println("Content Type  : " + contentType);
-        System.out.println("Folder        : " + folder);
-        System.out.println("Cloudinary    : " + cloudinary);
-        System.out.println("=======================================");
+        log.info("Cloudinary upload request: filename={}, size={} bytes, contentType={}, folder={}",
+                file.getOriginalFilename(), file.getSize(), contentType, folder);
 
         // -----------------------------
         // Upload to Cloudinary
         // -----------------------------
         try {
-
             Map<?, ?> result = cloudinary.uploader().upload(
                     file.getBytes(),
                     ObjectUtils.asMap(
@@ -73,30 +71,19 @@ public class CloudinaryImageService {
                     )
             );
 
-            System.out.println("Cloudinary upload successful");
-
             Object secureUrl = result.get("secure_url");
 
             if (secureUrl == null || secureUrl.toString().isBlank()) {
-
-                System.err.println(
-                        "Cloudinary response did not contain secure_url"
-                );
-
+                log.error("Cloudinary response did not contain secure_url");
                 throw new IllegalStateException(
                         "Cloudinary did not return a secure image URL"
                 );
             }
 
-            System.out.println("Secure URL: " + secureUrl);
-
             return secureUrl.toString();
 
         } catch (IOException e) {
-
-            System.err.println("Cloudinary IOException:");
-            e.printStackTrace();
-
+            log.error("Cloudinary IOException: {}", e.getMessage());
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Failed to send image to Cloudinary: " + e.getMessage(),
@@ -104,15 +91,24 @@ public class CloudinaryImageService {
             );
 
         } catch (RuntimeException e) {
-
-            System.err.println("Cloudinary Runtime/API error:");
-            e.printStackTrace();
-
+            log.error("Cloudinary Runtime/API error: {}", e.getMessage());
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Cloudinary upload failed: " + e.getMessage(),
                     e
             );
         }
+    }
+
+    public String uploadFallback(MultipartFile file, String folder, Throwable ex) {
+        if (ex instanceof ResponseStatusException rse && rse.getStatusCode().is4xxClientError()) {
+            throw rse;
+        }
+        log.error("Circuit breaker [cloudinaryClient] fallback activated. Reason: {}", ex.getMessage());
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Image storage service is currently unavailable. Please try again shortly.",
+                ex
+        );
     }
 }

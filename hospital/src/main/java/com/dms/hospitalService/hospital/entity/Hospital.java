@@ -57,14 +57,18 @@ public class Hospital {
     private Integer availableIcuBeds;
 
     // Capabilities for Smart Routing
+    @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hospital_specialities", joinColumns = @JoinColumn(name = "hospital_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "speciality")
     private Set<MedicalSpeciality> specialities = new HashSet<>();
     // Add these inside Hospital.java
+    @Builder.Default
     @OneToMany(mappedBy = "hospital", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MedicalInventory> inventories = new ArrayList<>();
+
+    @Builder.Default
 
     @OneToMany(mappedBy = "hospital", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PatientAdmission> admissions = new ArrayList<>();

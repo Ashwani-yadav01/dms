@@ -139,4 +139,13 @@ public interface IncidentRepository extends JpaRepository<Incident, UUID> {
             @Param("radiusInKm") Double radiusInKm,
             @Param("timeThreshold") LocalDateTime timeThreshold
     );
+
+    @Query("""
+        SELECT i FROM Incident i 
+        WHERE i.status IN ('REPORTED', 'VERIFIED', 'DISPATCHED') 
+          AND i.overdueNotified = false 
+          AND i.createdAt <= :threshold
+        ORDER BY i.createdAt ASC
+    """)
+    List<Incident> findOverdueIncompleteIncidents(@Param("threshold") LocalDateTime threshold);
 }

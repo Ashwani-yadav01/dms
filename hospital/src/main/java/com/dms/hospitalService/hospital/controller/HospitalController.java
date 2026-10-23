@@ -251,7 +251,7 @@ public class HospitalController {
         }
         if ("DISTRICT_ADMIN".equals(role)) {
             String deptCategory = request.getHeader("X-User-Department-Category");
-            return "HOSPITAL_MANAGEMENT".equals(deptCategory) || "MEDICAL_MANAGEMENT".equals(deptCategory) || "MEDICAL_RESPONSE".equals(deptCategory) || deptCategory == null;
+            return "HOSPITAL_MANAGEMENT".equals(deptCategory) || "MEDICAL_MANAGEMENT".equals(deptCategory) || "MEDICAL_RESPONSE".equals(deptCategory) || "DEPARTMENT_MANAGEMENT".equals(deptCategory) || deptCategory == null;
         }
         return false;
     }

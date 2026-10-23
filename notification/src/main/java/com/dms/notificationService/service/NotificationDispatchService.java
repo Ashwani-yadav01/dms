@@ -77,6 +77,35 @@ public class NotificationDispatchService {
     }
 
     @Transactional
+    public void dispatchIncidentSlaBreachAlert(String targetEmail, java.util.UUID incidentId, String title, String incidentType, String severity, Double latitude, Double longitude, String deptCategory, Long elapsedMinutes) {
+        String shortId = incidentId != null ? incidentId.toString().substring(0, Math.min(8, incidentId.toString().length())) : "N/A";
+        long hours = elapsedMinutes != null ? elapsedMinutes / 60 : 3;
+        String subject = String.format("🚨 URGENT SLA BREACH: Incident #%s Incomplete (> %dh)", shortId, hours);
+
+        String alertMessage = String.format(
+                "EMERGENCY RESOLUTION SLA BREACH ADVISORY\n\n" +
+                        "Attention District Administration,\n\n" +
+                        "An emergency incident has exceeded the mandatory 3-hour resolution target and remains INCOMPLETE.\n\n" +
+                        "Incident ID: %s\n" +
+                        "Title: %s\n" +
+                        "Type: %s\n" +
+                        "Severity: %s\n" +
+                        "Assigned Sector: %s\n" +
+                        "Coordinates: [%.4f, %.4f]\n" +
+                        "Elapsed Time: %d minutes (~%.1f hours)\n\n" +
+                        "Immediate Action: Review active on-scene units, re-allocate response resources, or escalate tactical command.\n\n" +
+                        "-- Disaster Management Command Center SLA Monitor",
+                incidentId, title, incidentType, severity, deptCategory,
+                latitude != null ? latitude : 0.0,
+                longitude != null ? longitude : 0.0,
+                elapsedMinutes != null ? elapsedMinutes : 180,
+                elapsedMinutes != null ? elapsedMinutes / 60.0 : 3.0
+        );
+
+        sendAndLogEmail(targetEmail, subject, alertMessage, "INCIDENT_SLA_BREACH");
+    }
+
+    @Transactional
     public int dispatchSafetyCheckInAlert(List<String> targetEmails, String senderName, String statusMessage, Double latitude, Double longitude, String timestamp) {
         String locInfo = (latitude != null && longitude != null)
                 ? String.format("Location: Coordinates [%.4f, %.4f]\nMap: https://maps.google.com/?q=%.4f,%.4f\n", latitude, longitude, latitude, longitude)

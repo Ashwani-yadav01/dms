@@ -10,12 +10,17 @@ import java.util.UUID;
 
 @Service
 public class RescueAuthorizationService {
+    public boolean isAuthorizedDispatchCategory(String cat) {
+        return cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat)
+                || "DISASTER_MANAGEMENT".equals(cat) || "ACCIDENT".equals(cat) || "FIRE_SAFETY".equals(cat)
+                || "MEDICAL_RESPONSE".equals(cat) || "MEDICAL_MANAGEMENT".equals(cat);
+    }
+
     public void requireDispatcher() {
         if ("SUPER_ADMIN".equals(role())) return;
         if ("DISTRICT_ADMIN".equals(role())) {
             String cat = claim("departmentCategory");
-            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat)
-                    || "DISASTER_MANAGEMENT".equals(cat) || "ACCIDENT".equals(cat) || "FIRE_SAFETY".equals(cat)) {
+            if (isAuthorizedDispatchCategory(cat)) {
                 return;
             }
         }
@@ -43,7 +48,7 @@ public class RescueAuthorizationService {
         if ("SUPER_ADMIN".equals(role())) return;
         if ("DISTRICT_ADMIN".equals(role())) {
             String cat = claim("departmentCategory");
-            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat) || "DISASTER_MANAGEMENT".equals(cat)) {
+            if (isAuthorizedDispatchCategory(cat)) {
                 return;
             }
             UUID actorId = currentUserIdOrNull();
@@ -58,7 +63,7 @@ public class RescueAuthorizationService {
         UUID actorId = currentUserIdOrNull();
         if ("DISTRICT_ADMIN".equals(role())) {
             String cat = claim("departmentCategory");
-            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat) || "DISASTER_MANAGEMENT".equals(cat)) {
+            if (isAuthorizedDispatchCategory(cat)) {
                 return;
             }
             if (actorId != null && dept.getDistrictAdminId() != null && dept.getDistrictAdminId().equals(actorId)) {
@@ -82,7 +87,7 @@ public class RescueAuthorizationService {
         UUID actorId = currentUserIdOrNull();
         if ("DISTRICT_ADMIN".equals(role())) {
             String cat = claim("departmentCategory");
-            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat) || "DISASTER_RESCUE".equals(cat)) {
+            if (isAuthorizedDispatchCategory(cat)) {
                 return;
             }
             if (actorId != null && mission.getDepartment().getDistrictAdminId() != null
@@ -106,6 +111,7 @@ public class RescueAuthorizationService {
                 || !departmentId.toString().equals(claim("rescueDepartmentId"))) deny();
     }
     public String currentRole() { return role(); }
+    public String departmentCategory() { return claim("departmentCategory"); }
     public boolean isSuperAdmin() { return "SUPER_ADMIN".equals(role()); }
     public boolean isDistrictAdmin() { return "DISTRICT_ADMIN".equals(role()); }
     public boolean isGovernmentOfficial() { return "GOVERNMENT_OFFICIAL".equals(role()); }

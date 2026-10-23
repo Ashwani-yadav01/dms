@@ -98,6 +98,10 @@ public class Incident {
     @Column(name = "parent_incident_id")
     private UUID parentIncidentId;
 
+    @Builder.Default
+    @Column(name = "overdue_notified", nullable = false)
+    private Boolean overdueNotified = false;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

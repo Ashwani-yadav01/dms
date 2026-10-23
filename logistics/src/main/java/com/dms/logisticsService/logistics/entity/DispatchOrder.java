@@ -2,6 +2,7 @@ package com.dms.logisticsService.logistics.entity;
 
 import com.dms.logisticsService.logistics.entity.enums.DispatchStatus;
 import com.dms.logisticsService.logistics.entity.enums.ItemType;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -17,6 +18,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class DispatchOrder {
 
     @Id
@@ -28,6 +30,7 @@ public class DispatchOrder {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_warehouse_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Warehouse sourceWarehouse;
 
     @Enumerated(EnumType.STRING)
@@ -42,6 +45,7 @@ public class DispatchOrder {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private TransportVehicle assignedVehicle;
 
     @Enumerated(EnumType.STRING)

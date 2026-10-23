@@ -2,6 +2,7 @@ package com.dms.notificationService.consumer;
 
 import com.dms.notificationService.events.HospitalSurgeStandbyEvent;
 import com.dms.notificationService.events.IncidentCreatedEvent;
+import com.dms.notificationService.events.IncidentOverdueEvent;
 import com.dms.notificationService.events.SupplyDispatchedEvent;
 import com.dms.notificationService.client.UserServiceClient;
 import com.dms.notificationService.service.NotificationDispatchService;
@@ -156,5 +157,45 @@ public class AlertBroadcastKafkaConsumer {
                 event.getWarehouseName(),
                 event.getEstimatedArrival()
         );
+    }
+
+    // =========================================================
+    // 4. INCIDENT OVERDUE SLA BREACH
+    // =========================================================
+
+    @KafkaListener(
+            topics = "${application.kafka.topic.incident-overdue:incident-overdue-topic}",
+            groupId = "notification-service-group",
+            containerFactory = "incidentOverdueKafkaListenerContainerFactory"
+    )
+    public void consumeIncidentOverdue(IncidentOverdueEvent event) {
+        log.warn("🚨 [Notification] Consumed IncidentOverdueEvent: ID={}, Title={}, Dept={}, Elapsed={}m",
+                event.getIncidentId(), event.getTitle(), event.getTargetDepartmentCategory(), event.getElapsedMinutes());
+
+        List<String> targetEmails = userServiceClient.fetchNearbyUserEmails(
+                event.getLatitude(),
+                event.getLongitude(),
+                35.0
+        );
+
+        if (targetEmails == null || targetEmails.isEmpty()) {
+            targetEmails = (defaultAdminEmail != null && !defaultAdminEmail.isBlank())
+                    ? List.of(defaultAdminEmail)
+                    : List.of("districtadmin.gkp@dms.gov.in");
+        }
+
+        for (String email : targetEmails) {
+            dispatchService.dispatchIncidentSlaBreachAlert(
+                    email,
+                    event.getIncidentId(),
+                    event.getTitle(),
+                    event.getIncidentType(),
+                    event.getSeverity(),
+                    event.getLatitude(),
+                    event.getLongitude(),
+                    event.getTargetDepartmentCategory(),
+                    event.getElapsedMinutes()
+            );
+        }
     }
 }

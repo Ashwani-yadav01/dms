@@ -28,6 +28,12 @@
 			<artifactId>spring-cloud-starter-gateway</artifactId>
 		</dependency>
 
+		<!-- 1b. Reactive Circuit Breaker with Resilience4j -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+		</dependency>
+
 		<!-- 2. JJWT for token validation in the Gateway -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

@@ -19,7 +19,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public abstract class UserProfile {
+public class UserProfile {
 
     @Id
     private UUID id;

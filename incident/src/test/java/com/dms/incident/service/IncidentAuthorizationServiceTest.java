@@ -68,6 +68,7 @@ class IncidentAuthorizationServiceTest {
 
     @Test void governmentOfficialCanResolveDispatchedAndVerifiedIncidents() {
         Incident dispatched = incident(citizen, null, null, IncidentStatus.DISPATCHED);
+        dispatched.setIncidentType(IncidentType.FIRE);
         Map<String, Object> claims = Map.of("govVerified", true, "officialStatus", "AVAILABLE",
                 "departmentCategory", "FIRE_SAFETY",
                 "officialLatitude", 26.8467, "officialLongitude", 80.9462, "officialDutyRadiusKm", 20.0);
@@ -75,6 +76,7 @@ class IncidentAuthorizationServiceTest {
         assertDoesNotThrow(() -> authorization.requireOfficialAssignment(dispatched));
 
         Incident verified = incident(citizen, null, null, IncidentStatus.VERIFIED);
+        verified.setIncidentType(IncidentType.FIRE);
         assertDoesNotThrow(() -> authorization.authorize(verified, com.dms.incident.entity.IncidentAction.RESOLVE));
     }
 

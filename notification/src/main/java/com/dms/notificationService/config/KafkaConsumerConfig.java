@@ -2,6 +2,7 @@ package com.dms.notificationService.config;
 
 import com.dms.notificationService.events.HospitalSurgeStandbyEvent;
 import com.dms.notificationService.events.IncidentCreatedEvent;
+import com.dms.notificationService.events.IncidentOverdueEvent;
 import com.dms.notificationService.events.SupplyDispatchedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -233,6 +234,35 @@ public class KafkaConsumerConfig {
                 supplyDispatchedConsumerFactory()
         );
 
+        return factory;
+    }
+
+    // =========================================================
+    // INCIDENT OVERDUE SLA BREACH
+    // =========================================================
+
+    @Bean
+    public ConsumerFactory<String, IncidentOverdueEvent> incidentOverdueConsumerFactory() {
+        JsonDeserializer<IncidentOverdueEvent> jsonDeserializer =
+                new JsonDeserializer<>(IncidentOverdueEvent.class, objectMapper());
+        jsonDeserializer.addTrustedPackages("com.dms.notificationService.events", "com.dms.common.events");
+        jsonDeserializer.setUseTypeHeaders(false);
+
+        ErrorHandlingDeserializer<IncidentOverdueEvent> errorHandlingDeserializer =
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+
+        return new DefaultKafkaConsumerFactory<>(
+                consumerProperties(),
+                new StringDeserializer(),
+                errorHandlingDeserializer
+        );
+    }
+
+    @Bean(name = "incidentOverdueKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, IncidentOverdueEvent> incidentOverdueKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, IncidentOverdueEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(incidentOverdueConsumerFactory());
         return factory;
     }
 }

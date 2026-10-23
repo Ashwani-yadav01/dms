@@ -2,6 +2,7 @@ package com.dms.logisticsService.logistics.entity;
 
 import com.dms.logisticsService.logistics.entity.enums.VehicleStatus;
 import com.dms.logisticsService.logistics.entity.enums.VehicleType;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -17,6 +18,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class TransportVehicle {
 
     @Id
@@ -40,6 +42,7 @@ public class TransportVehicle {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "base_warehouse_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Warehouse baseWarehouse;
 
     private Double currentLatitude;

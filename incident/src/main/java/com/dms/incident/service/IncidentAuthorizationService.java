@@ -80,19 +80,25 @@ public class IncidentAuthorizationService {
                 && incident.getStatus() == com.dms.incident.entity.IncidentStatus.REPORTED;
         boolean officialInRange = isDistrictOrSuperAdmin() || isVerifiedOfficialWithinRange(incident);
         boolean assignedOfficial = isVerifiedAssignedOfficial(incident, actor);
-        boolean allowed = switch (action) {
-            case VIEW -> canView(incident);
-            case UPDATE, DELETE -> ownerEditable;
-            case VERIFY, REJECT -> isDistrictOrSuperAdmin()
+        boolean allowed;
+        if (action == IncidentAction.VIEW) {
+            allowed = canView(incident);
+        } else if (action == IncidentAction.UPDATE || action == IncidentAction.DELETE) {
+            allowed = ownerEditable;
+        } else if (action == IncidentAction.VERIFY || action == IncidentAction.REJECT) {
+            allowed = isDistrictOrSuperAdmin()
                     && isOfficialAuthorizedForIncidentType(incident.getIncidentType())
                     && incident.getStatus() == com.dms.incident.entity.IncidentStatus.REPORTED;
-            case ASSIGN_OFFICIAL -> false;
-            case RESOLVE -> (isDistrictOrSuperAdmin() || assignedOfficial || isAssignedRescueTeam(incident)
-                    || ("GOVERNMENT_OFFICIAL".equals(role()) && (claimTrue("govVerified") || isVerifiedOfficialIdentity())))
+        } else if (action == IncidentAction.RESOLVE) {
+            allowed = (isDistrictOrSuperAdmin() || assignedOfficial || isAssignedRescueTeam(incident)
+                    || ("GOVERNMENT_OFFICIAL".equals(role())
+                        && (claimTrue("govVerified") || isVerifiedOfficialIdentity())
+                        && isOfficialAuthorizedForIncidentType(incident.getIncidentType())))
                     && (incident.getStatus() == com.dms.incident.entity.IncidentStatus.DISPATCHED
                         || incident.getStatus() == com.dms.incident.entity.IncidentStatus.VERIFIED);
-            case CREATE -> false;
-        };
+        } else {
+            allowed = false;
+        }
         if (!allowed) deny();
     }
     public void requireRescueAssignment(Incident incident) {

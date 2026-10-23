@@ -29,6 +29,7 @@ public class IncidentResponse {
     private IncidentType incidentType;
     private IncidentStatus status;
     private UUID reportedBy;
+    private UUID parentIncidentId;
     private Double deviceLatitude;
     private Double deviceLongitude;
     private Boolean isReportingOnBehalf;
@@ -37,4 +38,6 @@ public class IncidentResponse {
     private com.dms.incident.entity.LocationSource locationSource;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isOverdue;
+    private Boolean overdueNotified;
 }

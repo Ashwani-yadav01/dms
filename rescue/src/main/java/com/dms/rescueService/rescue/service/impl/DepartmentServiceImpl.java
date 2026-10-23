@@ -205,8 +205,18 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (authorization.isSuperAdmin()) {
             return departmentRepository.findAll().stream().map(this::mapToResponse).toList();
         }
-        if (authorization.isDistrictAdmin() && actorId != null) {
-            return departmentRepository.findByDistrictAdminId(actorId).stream().map(this::mapToResponse).toList();
+        if (authorization.isDistrictAdmin()) {
+            String cat = authorization.departmentCategory();
+            if (cat == null || cat.isBlank() || "DEPARTMENT_MANAGEMENT".equals(cat)) {
+                return departmentRepository.findAll().stream().map(this::mapToResponse).toList();
+            }
+            List<RescueDepartment> depts = actorId != null ? departmentRepository.findByDistrictAdminId(actorId) : List.of();
+            if (!depts.isEmpty()) {
+                return depts.stream().map(this::mapToResponse).toList();
+            }
+            return departmentRepository.findAll().stream()
+                    .filter(d -> isDepartmentMatchingCategory(d.getType(), cat))
+                    .map(this::mapToResponse).toList();
         }
         if (authorization.isGovernmentOfficial() && actorId != null) {
             return departmentRepository.findByGoverningOfficialIdOrStationChiefId(actorId, actorId).stream().map(this::mapToResponse).toList();
@@ -224,6 +234,17 @@ public class DepartmentServiceImpl implements DepartmentService {
                     .map(this::mapToResponse).toList();
         }
         return List.of();
+    }
+
+    private boolean isDepartmentMatchingCategory(com.dms.rescueService.rescue.entity.DepartmentType type, String cat) {
+        if (type == null || cat == null) return false;
+        return switch (cat) {
+            case "FIRE_SAFETY" -> type == com.dms.rescueService.rescue.entity.DepartmentType.FIRE_STATION || type == com.dms.rescueService.rescue.entity.DepartmentType.HAZMAT_TEAM;
+            case "DISASTER_MANAGEMENT", "DISASTER_RESCUE" -> type == com.dms.rescueService.rescue.entity.DepartmentType.DISASTER_RESCUE || type == com.dms.rescueService.rescue.entity.DepartmentType.NDRF_BASE;
+            case "ACCIDENT" -> type == com.dms.rescueService.rescue.entity.DepartmentType.LAW_ENFORCEMENT || type == com.dms.rescueService.rescue.entity.DepartmentType.FIRE_STATION || type == com.dms.rescueService.rescue.entity.DepartmentType.MEDICAL_UNIT;
+            case "MEDICAL_RESPONSE", "MEDICAL_MANAGEMENT" -> type == com.dms.rescueService.rescue.entity.DepartmentType.MEDICAL_UNIT;
+            default -> false;
+        };
     }
 
     @Override
